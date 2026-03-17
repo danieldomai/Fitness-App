@@ -388,9 +388,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={35} />
                 <Tooltip contentStyle={tooltipStyle} labelFormatter={(label) => `Week of ${label}`}
-                  formatter={(value: number, name: string) => {
-                    const label = DISCIPLINE_LABELS[name] || name;
-                    const unit = ['swim'].includes(name) ? 'km' : ['run', 'bike', 'ride'].includes(name) ? 'mi' : 'sessions';
+                  formatter={(value: unknown, name: unknown) => {
+                    const label = DISCIPLINE_LABELS[String(name)] || String(name);
+                    const unit = ['swim'].includes(String(name)) ? 'km' : ['run', 'bike', 'ride'].includes(String(name)) ? 'mi' : 'sessions';
                     return [`${value} ${unit}`, label];
                   }} />
                 <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />

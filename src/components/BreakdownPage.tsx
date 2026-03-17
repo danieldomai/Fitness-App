@@ -270,9 +270,9 @@ export default function BreakdownPage({ onBack }: Props) {
                   <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={40} />
                   <Tooltip contentStyle={tooltipStyle}
-                    formatter={(value: number, name: string) => {
-                      const label = DISCIPLINE_LABELS[name] || name;
-                      const unit = ['swim'].includes(name) ? 'km' : ['run', 'bike', 'ride'].includes(name) ? 'mi' : 'sessions';
+                    formatter={(value: unknown, name: unknown) => {
+                      const label = DISCIPLINE_LABELS[String(name)] || String(name);
+                      const unit = ['swim'].includes(String(name)) ? 'km' : ['run', 'bike', 'ride'].includes(String(name)) ? 'mi' : 'sessions';
                       return [`${value} ${unit}`, label];
                     }} />
                   <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />
@@ -293,9 +293,9 @@ export default function BreakdownPage({ onBack }: Props) {
                   <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={40} />
                   <Tooltip contentStyle={tooltipStyle}
-                    formatter={(value: number, name: string) => {
-                      const label = DISCIPLINE_LABELS[name] || name;
-                      const unit = ['swim'].includes(name) ? 'km' : ['run', 'bike', 'ride'].includes(name) ? 'mi' : 'sessions';
+                    formatter={(value: unknown, name: unknown) => {
+                      const label = DISCIPLINE_LABELS[String(name)] || String(name);
+                      const unit = ['swim'].includes(String(name)) ? 'km' : ['run', 'bike', 'ride'].includes(String(name)) ? 'mi' : 'sessions';
                       return [`${value} ${unit}`, label];
                     }} />
                   <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />
@@ -318,13 +318,13 @@ export default function BreakdownPage({ onBack }: Props) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={105} paddingAngle={2} dataKey="value" stroke="none"
-                      label={({ pct }) => `${pct}%`}>
+                      label={({ payload }: { payload?: { pct?: number } }) => `${payload?.pct ?? 0}%`}>
                       {pieData.map((entry, idx) => (
                         <Cell key={idx} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={tooltipStyle}
-                      formatter={(value: number, name: string) => [`${value} (${pieData.find(p => p.name === name)?.pct}%)`, name]} />
+                      formatter={(value: unknown, name: unknown) => [`${value} (${pieData.find(p => p.name === String(name))?.pct}%)`, String(name)]} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { RaceId } from '../types';
 import { WEEKLY_GOALS } from '../constants';
-import { formatTime, getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
+import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
 
 interface Props {
   raceId: RaceId;

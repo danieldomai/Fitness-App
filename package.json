@@ -15,6 +15,9 @@
     "react-is": "^19.2.4",
     "recharts": "^3.8.0"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4.2.1",
