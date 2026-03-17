@@ -20,7 +20,15 @@
       "Bash(ls /usr/local/bin/node /usr/local/bin/npm /opt/homebrew/bin/node /opt/homebrew/bin/npm ~/.nvm/versions/node/*/bin/node)",
       "Bash(export PATH=\"/Users/danieldomai/.fnm/node-versions/v24.14.0/installation/bin:$PATH\")",
       "Bash(timeout 3 node server.js)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(gh auth:*)",
+      "Bash(mkdir -p ~/.ssh)",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(~/.ssh/known_hosts)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh -vT git@github.com)",
+      "Bash(ssh-keyscan -t ed25519 github.com)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }
