@@ -5,10 +5,17 @@ interface LevelSegment {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  Elite: 'bg-white/30',
-  Competitive: 'bg-white/20',
-  Average: 'bg-white/12',
-  Beginner: 'bg-white/6',
+  Elite: 'bg-emerald-500',
+  Competitive: 'bg-sky-500',
+  Average: 'bg-amber-500',
+  Beginner: 'bg-rose-400',
+};
+
+const LEVEL_TEXT_COLORS: Record<string, string> = {
+  Elite: 'text-emerald-400',
+  Competitive: 'text-sky-400',
+  Average: 'text-amber-400',
+  Beginner: 'text-rose-300',
 };
 
 interface Props {
@@ -31,14 +38,14 @@ export default function LevelTimeline({ levels, sliderMin, sliderMax }: Props) {
           if (width <= 0) return null;
           return (
             <div key={level.label} style={{ width: `${width}%` }} className="text-center">
-              <span className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${LEVEL_TEXT_COLORS[level.label] || 'text-gray-500'}`}>
                 {level.label}
               </span>
             </div>
           );
         })}
       </div>
-      <div className="flex w-full rounded-full overflow-hidden h-1.5 bg-white/[0.03]">
+      <div className="flex w-full rounded-full overflow-hidden h-2 bg-white/[0.03] gap-px">
         {levels.map((level) => {
           const clampedMin = Math.max(level.min, sliderMin);
           const clampedMax = Math.min(level.max, sliderMax);
