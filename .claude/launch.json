@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "/Users/danieldomai/.fnm/fnm",
+      "runtimeArgs": ["exec", "--", "npx", "vite", "--port", "5173"],
+      "port": 5173
+    },
+    {
+      "name": "rag-server",
+      "runtimeExecutable": "/Users/danieldomai/.fnm/fnm",
+      "runtimeArgs": ["exec", "--", "node", "server/server.js"],
+      "port": 3333
+    }
+  ]
+}

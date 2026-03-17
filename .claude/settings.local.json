@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/danieldomai/Library/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/danieldomai/**)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/brew install:*)",
+      "Bash(/usr/local/bin/brew install:*)",
+      "Bash(curl -fsSL https://fnm.vercel.app/install)",
+      "Bash(bash)",
+      "Bash(bash -s -- --skip-shell --install-dir \"$HOME/.fnm\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc:*)",
+      "Bash(/Users/danieldomai/.local/share/fnm/fnm exec:*)",
+      "Bash(/Users/danieldomai/.fnm/fnm exec:*)",
+      "Bash(npm install:*)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\")",
+      "Bash(ls /usr/local/bin/node /usr/local/bin/npm /opt/homebrew/bin/node /opt/homebrew/bin/npm ~/.nvm/versions/node/*/bin/node)",
+      "Bash(export PATH=\"/Users/danieldomai/.fnm/node-versions/v24.14.0/installation/bin:$PATH\")",
+      "Bash(timeout 3 node server.js)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}
