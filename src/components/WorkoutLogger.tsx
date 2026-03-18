@@ -10,7 +10,7 @@ interface Props {
 const DISCIPLINE_LABELS: Record<string, { label: string; unit: string }> = {
   run: { label: 'Run', unit: 'mi' },
   swim: { label: 'Swim', unit: 'km' },
-  bike: { label: 'Bike', unit: 'mi' },
+  bike: { label: 'Cycle', unit: 'mi' },
   skierg: { label: 'SkiErg', unit: 'sessions' },
   'sled-push': { label: 'Sled Push', unit: 'sessions' },
   'sled-pull': { label: 'Sled Pull', unit: 'sessions' },
@@ -19,7 +19,7 @@ const DISCIPLINE_LABELS: Record<string, { label: string; unit: string }> = {
   'farmers-carry': { label: 'Farmers Carry', unit: 'sessions' },
   'sandbag-lunges': { label: 'Sandbag Lunges', unit: 'sessions' },
   'wall-balls': { label: 'Wall Balls', unit: 'sessions' },
-  ride: { label: 'Ride', unit: 'mi' },
+  ride: { label: 'Cycle', unit: 'mi' },
 };
 
 function parseTimeInput(raw: string): number {

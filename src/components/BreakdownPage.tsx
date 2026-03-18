@@ -13,7 +13,7 @@ interface Props {
 type TimeRange = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 const DISCIPLINE_LABELS: Record<string, string> = {
-  run: 'Run', swim: 'Swim', bike: 'Bike', ride: 'Ride',
+  run: 'Run', swim: 'Swim', bike: 'Cycle', ride: 'Cycle',
   skierg: 'SkiErg', 'sled-push': 'Sled Push', 'sled-pull': 'Sled Pull',
   'burpee-broad-jump': 'Burpee BJ', rowing: 'Rowing',
   'farmers-carry': 'Farmers Carry', 'sandbag-lunges': 'Lunges', 'wall-balls': 'Wall Balls',

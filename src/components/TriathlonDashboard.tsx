@@ -41,7 +41,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatsCard label="Swim" value={`${config.swim.distance} ${config.swim.unit} (${config.swim.meters}m)`} />
-        <StatsCard label="Bike" value={`${config.bike.distance} ${config.bike.unit}`} />
+        <StatsCard label="Cycle" value={`${config.bike.distance} ${config.bike.unit}`} />
         <StatsCard label="Run" value={`${config.run.distance} ${config.run.unit}`} />
         <StatsCard label="Total Cutoff" value={config.totalCutoff} />
       </div>
@@ -49,7 +49,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
       {config.intermediateCutoffs && (
         <div className="grid grid-cols-2 gap-4">
           <StatsCard label="Swim Cutoff" value={config.intermediateCutoffs.swim} />
-          <StatsCard label="Bike Cutoff" value={config.intermediateCutoffs.bike} />
+          <StatsCard label="Cycle Cutoff" value={config.intermediateCutoffs.bike} />
         </div>
       )}
 
@@ -57,7 +57,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Total Finish Time</div>
         <div className="text-2xl font-bold text-[#1E6F6B] mt-1">{formatTime(totalEstimate)}</div>
         <div className="text-xs text-gray-500 mt-1">
-          Swim {formatTime(swimSplit)} + Bike {formatTime(bikeSplit)} + Run {formatTime(runSplit)} + T1/T2 ~{formatTime(transitionEstimate)}
+          Swim {formatTime(swimSplit)} + Cycle {formatTime(bikeSplit)} + Run {formatTime(runSplit)} + T1/T2 ~{formatTime(transitionEstimate)}
         </div>
       </div>
 
@@ -70,7 +70,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
               tab === d ? 'bg-[#1E6F6B] text-white' : 'bg-white/[0.02] text-gray-500 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            {d}
+            {d === 'bike' ? 'Cycle' : d}
           </button>
         ))}
       </div>
@@ -103,7 +103,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
 
       {tab === 'bike' && (
         <div className="glass p-6 space-y-4">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bike Speed Calculator</h3>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Cycle Speed Calculator</h3>
           <LevelTimeline levels={GOAL_LEVELS['tri-bike']} sliderMin={10} sliderMax={28} />
           <input
             type="range"
@@ -120,7 +120,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
               <div className="text-xl font-bold text-[#1E6F6B]">{bikeSpeed} mph</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Bike Split</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Cycle Split</div>
               <div className="text-xl font-bold text-white">{formatTime(bikeSplit)}</div>
             </div>
           </div>
