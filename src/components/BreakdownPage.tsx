@@ -78,12 +78,28 @@ function getCurrentWeekDays(): string[] {
   return days;
 }
 
+// Normalize keys: ride → bike (both display as "Cycle")
+const NORM: Record<string, string> = { ride: 'bike' };
+const norm = (d: string) => NORM[d] || d;
+
+// Canonical source for shared disciplines — only read from one race to avoid double-counting synced data
+const CANONICAL: Record<string, RaceId> = {
+  run: 'half-marathon',
+  swim: 'ironman-70.3',
+  bike: 'ironman-70.3',
+  ride: 'cycling',
+};
+
 function loadWeekData(weekKey: string) {
   const disc: Record<string, number> = {};
   for (const raceId of ALL_RACE_IDS) {
     const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${weekKey}`, {});
     for (const [d, val] of Object.entries(distances)) {
-      if (val > 0) disc[d] = (disc[d] || 0) + val;
+      if (val <= 0) continue;
+      // For shared disciplines, only count from canonical race
+      if (CANONICAL[d] && CANONICAL[d] !== raceId) continue;
+      const key = norm(d);
+      disc[key] = (disc[key] || 0) + val;
     }
   }
   return { disc };

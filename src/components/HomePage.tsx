@@ -201,6 +201,18 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const aggregatedData = useMemo(() => {
     const allRaceIds: RaceId[] = ['half-marathon', 'marathon', 'hyrox', 'ironman-70.3', 'ironman-140.6', 'cycling'];
 
+    // Normalize keys: ride → bike (both display as "Cycle")
+    const NORM: Record<string, string> = { ride: 'bike' };
+    const norm = (d: string) => NORM[d] || d;
+
+    // Canonical source for shared disciplines — only read from one race to avoid double-counting synced data
+    const CANONICAL: Record<string, RaceId> = {
+      run: 'half-marathon',
+      swim: 'ironman-70.3',
+      bike: 'ironman-70.3',
+      ride: 'cycling',
+    };
+
     const weeklyByDiscipline: Record<string, number>[] = [];
     const allDiscsSeen = new Set<string>();
     const totalByDiscipline: Record<string, number> = {};
@@ -213,9 +225,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
 
     for (const wk of weekKeys) {
       let weekTime = 0;
-      let weekSessions = 0;
       const weekHrs: number[] = [];
       const weekDisc: Record<string, number> = {};
+      const weekSessions = new Set<string>(); // track unique discipline sessions
 
       for (const raceId of allRaceIds) {
         const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${wk}`, {});
@@ -223,23 +235,30 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         const hrs = loadFromStorage<number[]>(`hr-${raceId}-${wk}`, []);
 
         for (const [disc, val] of Object.entries(distances)) {
-          if (val > 0) {
-            totalDistance += val;
-            weekSessions++;
-            weekDisc[disc] = (weekDisc[disc] || 0) + val;
-            totalByDiscipline[disc] = (totalByDiscipline[disc] || 0) + val;
-            allDiscsSeen.add(disc);
-            if (!lastWorkoutDate || wk > lastWorkoutDate) lastWorkoutDate = wk;
-          }
+          if (val <= 0) continue;
+          const key = norm(disc);
+
+          // For shared disciplines, only count from the canonical race
+          if (CANONICAL[disc] && CANONICAL[disc] !== raceId) continue;
+
+          weekDisc[key] = (weekDisc[key] || 0) + val;
+          totalByDiscipline[key] = (totalByDiscipline[key] || 0) + val;
+          totalDistance += val;
+          allDiscsSeen.add(key);
+          weekSessions.add(key);
+          if (!lastWorkoutDate || wk > lastWorkoutDate) lastWorkoutDate = wk;
         }
-        for (const [, val] of Object.entries(times)) {
-          if (val > 0) weekTime += val;
+        for (const [disc, val] of Object.entries(times)) {
+          if (val <= 0) continue;
+          // Same dedup for time
+          if (CANONICAL[disc] && CANONICAL[disc] !== raceId) continue;
+          weekTime += val;
         }
         weekHrs.push(...hrs);
       }
 
       totalWorkoutTime += weekTime;
-      totalSessions += weekSessions;
+      totalSessions += weekSessions.size;
       allHrReadings.push(...weekHrs);
       weeklyByDiscipline.push(weekDisc);
     }
