@@ -119,6 +119,33 @@ export const WEEKLY_GOALS: Record<RaceId, Record<string, number>> = {
   'cycling': { ride: 100 },
 };
 
+// Shared discipline links: when logging a workout in one race,
+// automatically sync to all other races that use the same discipline.
+// Each entry maps a discipline key to the list of (raceId, discipline) pairs it syncs to.
+export const SHARED_DISCIPLINES: Record<string, { raceId: RaceId; discipline: string }[]> = {
+  run: [
+    { raceId: 'half-marathon', discipline: 'run' },
+    { raceId: 'marathon', discipline: 'run' },
+    { raceId: 'hyrox', discipline: 'run' },
+    { raceId: 'ironman-70.3', discipline: 'run' },
+    { raceId: 'ironman-140.6', discipline: 'run' },
+  ],
+  swim: [
+    { raceId: 'ironman-70.3', discipline: 'swim' },
+    { raceId: 'ironman-140.6', discipline: 'swim' },
+  ],
+  bike: [
+    { raceId: 'ironman-70.3', discipline: 'bike' },
+    { raceId: 'ironman-140.6', discipline: 'bike' },
+    { raceId: 'cycling', discipline: 'ride' },
+  ],
+  ride: [
+    { raceId: 'ironman-70.3', discipline: 'bike' },
+    { raceId: 'ironman-140.6', discipline: 'bike' },
+    { raceId: 'cycling', discipline: 'ride' },
+  ],
+};
+
 export const CYCLING_REFERENCE = [
   { level: 'Elite', speed: '22+ mph', note: 'Cat 1/2 racers' },
   { level: 'Competitive', speed: '18-21 mph', note: 'Cat 3/4 racers' },

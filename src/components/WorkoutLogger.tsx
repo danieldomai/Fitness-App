@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { RaceId } from '../types';
-import { WEEKLY_GOALS } from '../constants';
+import { WEEKLY_GOALS, SHARED_DISCIPLINES, RACES } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
 
 interface Props {
@@ -73,26 +73,56 @@ export default function WorkoutLogger({ raceId }: Props) {
 
   const handleLog = () => {
     const updated = { ...totals };
+    const updatedTime = { ...timeTotals };
+
+    // Collect what was logged this session
+    const loggedDistances: Record<string, number> = {};
+    const loggedTimes: Record<string, number> = {};
+
     for (const d of disciplines) {
       const val = parseFloat(inputs[d]);
       if (val > 0) {
         updated[d] = (updated[d] || 0) + val;
+        loggedDistances[d] = val;
+      }
+      const secs = parseTimeInput(timeInputs[d]);
+      if (secs > 0) {
+        updatedTime[d] = (updatedTime[d] || 0) + secs;
+        loggedTimes[d] = secs;
       }
     }
+
     setTotals(updated);
     saveToStorage(storageKey, updated);
     setInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
 
-    const updatedTime = { ...timeTotals };
-    for (const d of disciplines) {
-      const secs = parseTimeInput(timeInputs[d]);
-      if (secs > 0) {
-        updatedTime[d] = (updatedTime[d] || 0) + secs;
-      }
-    }
     setTimeTotals(updatedTime);
     saveToStorage(timeStorageKey, updatedTime);
     setTimeInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
+
+    // Sync to linked races
+    for (const [disc, val] of Object.entries(loggedDistances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === raceId && link.discipline === disc) continue; // skip self
+        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
+        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
+        linkedData[link.discipline] = (linkedData[link.discipline] || 0) + val;
+        saveToStorage(linkedKey, linkedData);
+      }
+    }
+    for (const [disc, secs] of Object.entries(loggedTimes)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === raceId && link.discipline === disc) continue;
+        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
+        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
+        linkedTimeData[link.discipline] = (linkedTimeData[link.discipline] || 0) + secs;
+        saveToStorage(linkedTimeKey, linkedTimeData);
+      }
+    }
 
     const hr = parseInt(hrInput);
     if (hr > 0) {
@@ -129,7 +159,13 @@ export default function WorkoutLogger({ raceId }: Props) {
             const info = DISCIPLINE_LABELS[d] || { label: d, unit: '' };
             return (
               <div key={d} className="bg-white/[0.02] rounded-lg px-4 py-3 border border-white/[0.05]">
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">{info.label}</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-0.5">{info.label}</label>
+                {SHARED_DISCIPLINES[d] && (() => {
+                  const linked = SHARED_DISCIPLINES[d].filter(l => !(l.raceId === raceId && l.discipline === d));
+                  if (linked.length === 0) return null;
+                  const names = linked.map(l => RACES.find(r => r.id === l.raceId)?.icon || l.raceId);
+                  return <div className="text-[9px] text-gray-600 mb-1.5">Syncs to {names.join(', ')}</div>;
+                })()}
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2">
                     <input
