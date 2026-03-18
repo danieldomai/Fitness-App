@@ -60,6 +60,33 @@ const CHART_COLORS: Record<string, string> = {
   'wall-balls': '#EC4899',
 };
 
+const QUOTES = [
+  { text: 'The only bad workout is the one that didn\'t happen.', author: 'Unknown' },
+  { text: 'Success isn\'t always about greatness. It\'s about consistency.', author: 'Dwayne Johnson' },
+  { text: 'The pain you feel today will be the strength you feel tomorrow.', author: 'Arnold Schwarzenegger' },
+  { text: 'Don\'t limit your challenges. Challenge your limits.', author: 'Jerry Dunn' },
+  { text: 'It\'s supposed to be hard. If it were easy, everyone would do it.', author: 'Tom Hanks' },
+  { text: 'Your body can stand almost anything. It\'s your mind that you have to convince.', author: 'Andrew Murphy' },
+  { text: 'The difference between try and triumph is a little umph.', author: 'Marvin Phillips' },
+  { text: 'Motivation is what gets you started. Habit is what keeps you going.', author: 'Jim Ryun' },
+  { text: 'Run when you can, walk if you have to, crawl if you must; just never give up.', author: 'Dean Karnazes' },
+  { text: 'The clock is ticking. Are you becoming the person you want to be?', author: 'Greg Plitt' },
+  { text: 'Strength does not come from physical capacity. It comes from an indomitable will.', author: 'Mahatma Gandhi' },
+  { text: 'The real workout starts when you want to stop.', author: 'Ronnie Coleman' },
+  { text: 'Suffer the pain of discipline or suffer the pain of regret.', author: 'Jim Rohn' },
+  { text: 'Champions aren\'t made in gyms. Champions are made from something deep inside them.', author: 'Muhammad Ali' },
+  { text: 'The body achieves what the mind believes.', author: 'Napoleon Hill' },
+  { text: 'You don\'t have to be extreme, just consistent.', author: 'Unknown' },
+  { text: 'If it doesn\'t challenge you, it won\'t change you.', author: 'Fred DeVito' },
+  { text: 'Every champion was once a contender that refused to give up.', author: 'Rocky Balboa' },
+  { text: 'Training is the opposite of hoping.', author: 'Mark Twight' },
+  { text: 'Sweat is just fat crying.', author: 'Unknown' },
+  { text: 'The only person you are destined to become is the person you decide to be.', author: 'Ralph Waldo Emerson' },
+  { text: 'What seems impossible today will one day become your warm-up.', author: 'Unknown' },
+  { text: 'Discipline is choosing between what you want now and what you want most.', author: 'Abraham Lincoln' },
+  { text: 'Push yourself because no one else is going to do it for you.', author: 'Unknown' },
+];
+
 export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [profile, setProfile] = useState<UserProfile>(() =>
     loadFromStorage('user-profile', { name: '', age: '', weight: '', height: '', gender: '' })
@@ -86,6 +113,17 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Quote that rotates every 10 minutes
+  const getQuoteIndex = () => Math.floor(Date.now() / (10 * 60 * 1000)) % QUOTES.length;
+  const [quoteIndex, setQuoteIndex] = useState(getQuoteIndex);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQuoteIndex(getQuoteIndex());
+    }, 60 * 1000); // check every minute
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -272,15 +310,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     };
   }, [weekKeys, currentWeekKey]);
 
-  const bmi = useMemo(() => {
-    const w = parseFloat(profile.weight);
-    const h = parseFloat(profile.height);
-    if (!w || !h || h === 0) return null;
-    return Math.round((w / (h * h)) * 703 * 10) / 10;
-  }, [profile.weight, profile.height]);
-
-  const bmiLabel = bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese') : null;
-
   const tooltipStyle = {
     backgroundColor: 'rgba(15, 17, 23, 0.95)',
     border: '1px solid rgba(255,255,255,0.08)',
@@ -346,7 +375,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="bg-white/[0.02] rounded-lg p-2.5 text-center border border-white/[0.05]">
               <div className="text-lg font-bold text-white">{profile.weight || '-'}</div>
               <div className="text-[10px] text-gray-600 uppercase">lbs</div>
@@ -357,12 +386,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </div>
               <div className="text-[10px] text-gray-600 uppercase">height</div>
             </div>
-            <div className="bg-white/[0.02] rounded-lg p-2.5 text-center border border-white/[0.05]">
-              <div className="text-lg font-bold text-white">{bmi ?? '-'}</div>
-              <div className="text-[10px] text-gray-600 uppercase">bmi</div>
-            </div>
           </div>
-          {bmi && <div className="text-xs text-gray-500 text-center">{bmiLabel}</div>}
         </div>
       )}
     </div>
@@ -661,6 +685,15 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Quote of the Hour */}
+      <div className="flex items-start gap-3 px-1">
+        <span className="text-[#1E6F6B] text-lg leading-none mt-0.5">"</span>
+        <div>
+          <p className="text-sm text-gray-400 italic">{QUOTES[quoteIndex].text}</p>
+          <p className="text-[10px] text-gray-600 mt-1 uppercase tracking-wider">— {QUOTES[quoteIndex].author}</p>
         </div>
       </div>
 
