@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   RadialBarChart, RadialBar,
 } from 'recharts';
 import { RACES, WEEKLY_GOALS } from '../constants';
@@ -30,7 +31,9 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'profile', label: 'Athlete Profile', visible: true },
   { id: 'recovery', label: 'Recovery Status', visible: true },
   { id: 'quick-stats', label: 'Quick Stats', visible: true },
-  { id: 'volume', label: 'Weekly Training Volume', visible: true },
+  { id: 'volume', label: 'Volume Trend (Line)', visible: true },
+  { id: 'volume-bar', label: 'Volume Breakdown (Bar)', visible: true },
+  { id: 'distribution', label: 'Training Distribution (Pie)', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
 
@@ -68,7 +71,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [layout, setLayout] = useState<DashboardSection[]>(() => {
     const saved = loadFromStorage<DashboardSection[] | null>('dashboard-layout', null);
     if (saved && Array.isArray(saved)) {
-      // Merge with defaults in case new sections were added
       const savedIds = new Set(saved.map(s => s.id));
       const merged = [...saved];
       for (const def of DEFAULT_LAYOUT) {
@@ -120,7 +122,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const toggleSection = (id: string) => {
     const visibleCount = layout.filter(s => s.visible).length;
     const section = layout.find(s => s.id === id);
-    if (section?.visible && visibleCount <= 1) return; // keep at least one
+    if (section?.visible && visibleCount <= 1) return;
     const next = layout.map(s => s.id === id ? { ...s, visible: !s.visible } : s);
     updateLayout(next);
   };
@@ -163,6 +165,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
 
     const weeklyByDiscipline: Record<string, number>[] = [];
     const allDiscsSeen = new Set<string>();
+    const totalByDiscipline: Record<string, number> = {};
 
     let totalWorkoutTime = 0;
     let totalDistance = 0;
@@ -186,6 +189,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             totalDistance += val;
             weekSessions++;
             weekDisc[disc] = (weekDisc[disc] || 0) + val;
+            totalByDiscipline[disc] = (totalByDiscipline[disc] || 0) + val;
             allDiscsSeen.add(disc);
             if (!lastWorkoutDate || wk > lastWorkoutDate) lastWorkoutDate = wk;
           }
@@ -209,6 +213,17 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       }
       return row;
     }).reverse();
+
+    // Pie chart data: distribution of total volume by discipline
+    const totalVolume = Object.values(totalByDiscipline).reduce((a, b) => a + b, 0);
+    const pieData = Object.entries(totalByDiscipline)
+      .sort((a, b) => b[1] - a[1])
+      .map(([disc, val]) => ({
+        name: DISCIPLINE_LABELS[disc] || disc,
+        value: val,
+        pct: totalVolume > 0 ? Math.round((val / totalVolume) * 1000) / 10 : 0,
+        color: CHART_COLORS[disc] || '#6B7280',
+      }));
 
     const currentWeekTime = weeklyByDiscipline[0] ? Object.values(weeklyByDiscipline[0]).reduce((a, b) => a + b, 0) : 0;
     const prevWeekTime = weeklyByDiscipline[1] ? Object.values(weeklyByDiscipline[1]).reduce((a, b) => a + b, 0) : 0;
@@ -244,6 +259,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     return {
       weeklyLineData,
       activeDisciplines: Array.from(allDiscsSeen),
+      pieData,
       totalDistance: Math.round(totalDistance),
       totalWorkoutTime,
       totalSessions,
@@ -395,9 +411,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     </div>
   );
 
-  const renderVolume = () => (
+  const renderVolumeLine = () => (
     <div className="glass p-5 space-y-3">
-      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Weekly Training Volume</h3>
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Volume Trend</h3>
       {aggregatedData.activeDisciplines.length > 0 ? (
         <div style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -423,6 +439,86 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       ) : (
         <div className="flex items-center justify-center" style={{ height: 220 }}>
           <div className="text-xs text-gray-600">Log workouts to see your volume trends</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderVolumeBar = () => (
+    <div className="glass p-5 space-y-3">
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Weekly Volume Breakdown</h3>
+      {aggregatedData.activeDisciplines.length > 0 ? (
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={aggregatedData.weeklyLineData}>
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={35} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelFormatter={(label) => `Week of ${label}`}
+                formatter={(value: unknown, name: unknown) => {
+                  const label = DISCIPLINE_LABELS[String(name)] || String(name);
+                  const unit = ['swim'].includes(String(name)) ? 'km' : ['run', 'bike', 'ride'].includes(String(name)) ? 'mi' : 'sessions';
+                  return [`${value} ${unit}`, label];
+                }}
+              />
+              <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />
+              {aggregatedData.activeDisciplines.map((disc) => (
+                <Bar key={disc} dataKey={disc} fill={CHART_COLORS[disc] || '#6B7280'} radius={[3, 3, 0, 0]} stackId="stack" />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center" style={{ height: 220 }}>
+          <div className="text-xs text-gray-600">Log workouts to see your volume breakdown</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDistribution = () => (
+    <div className="glass p-5 space-y-3">
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Training Distribution</h3>
+      {aggregatedData.pieData.length > 0 ? (
+        <div className="flex flex-col lg:flex-row items-center gap-6">
+          <div style={{ width: 200, height: 200 }} className="flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={aggregatedData.pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={2}
+                  dataKey="value"
+                  strokeWidth={0}
+                >
+                  {aggregatedData.pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  formatter={(value: unknown, name: unknown) => [`${value}`, String(name)]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex-1 space-y-2 w-full">
+            {aggregatedData.pieData.map((entry) => (
+              <div key={entry.name} className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                <span className="text-sm text-gray-400 flex-1">{entry.name}</span>
+                <span className="text-sm font-semibold text-white">{entry.pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center" style={{ height: 200 }}>
+          <div className="text-xs text-gray-600">Log workouts to see your training distribution</div>
         </div>
       )}
     </div>
@@ -482,7 +578,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     'profile': renderProfile,
     'recovery': renderRecovery,
     'quick-stats': renderQuickStats,
-    'volume': renderVolume,
+    'volume': renderVolumeLine,
+    'volume-bar': renderVolumeBar,
+    'distribution': renderDistribution,
     'race-progress': renderRaceProgress,
   };
 
@@ -643,7 +741,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       )}
 
       {/* Dashboard content — rendered in layout order */}
-      {/* Top row: 3-col grid for profile/recovery/stats (rendered in layout order) */}
       {visibleTopRow.length > 0 && (
         <div className={`grid grid-cols-1 gap-4 ${
           visibleTopRow.length === 1 ? 'lg:grid-cols-1' :
