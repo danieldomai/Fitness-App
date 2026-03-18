@@ -274,8 +274,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     padding: '8px 12px',
   };
 
-  const isVisible = (id: string) => layout.find(s => s.id === id)?.visible ?? true;
-
   /* ── Section renderers ── */
 
   const renderProfile = () => (
