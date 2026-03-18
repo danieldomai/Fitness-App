@@ -3,6 +3,15 @@ import type { RaceId } from '../types';
 import { WEEKLY_GOALS, SHARED_DISCIPLINES, RACES } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
 
+export interface WorkoutHistoryEntry {
+  id: string;
+  timestamp: string;
+  raceId: RaceId;
+  distances: Record<string, number>;
+  times: Record<string, number>;
+  hr?: number;
+}
+
 interface Props {
   raceId: RaceId;
 }
@@ -130,6 +139,21 @@ export default function WorkoutLogger({ raceId }: Props) {
       setHrHistory(updatedHr);
       saveToStorage(hrStorageKey, updatedHr);
       setHrInput('');
+    }
+
+    // Save individual history entry (for the global History panel)
+    const hasAnyData = Object.keys(loggedDistances).length > 0 || Object.keys(loggedTimes).length > 0 || (hr > 0);
+    if (hasAnyData) {
+      const historyEntries = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+      historyEntries.unshift({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+        raceId,
+        distances: loggedDistances,
+        times: loggedTimes,
+        hr: hr > 0 ? hr : undefined,
+      });
+      saveToStorage('workout-history', historyEntries);
     }
   };
 

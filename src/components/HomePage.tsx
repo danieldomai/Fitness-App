@@ -4,9 +4,10 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   RadialBarChart, RadialBar,
 } from 'recharts';
-import { RACES, WEEKLY_GOALS } from '../constants';
+import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
 import type { RaceId } from '../types';
-import { getPastWeekKeys, loadFromStorage, saveToStorage, formatTime } from '../utils';
+import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime } from '../utils';
+import type { WorkoutHistoryEntry } from './WorkoutLogger';
 
 interface Props {
   onSelect: (id: RaceId) => void;
@@ -112,6 +113,14 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   );
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<WorkoutHistoryEntry[]>(() =>
+    loadFromStorage<WorkoutHistoryEntry[]>('workout-history', [])
+  );
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editDistances, setEditDistances] = useState<Record<string, string>>({});
+  const [editTimes, setEditTimes] = useState<Record<string, string>>({});
+  const [editHr, setEditHr] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Quote that rotates every 10 minutes
@@ -193,6 +202,193 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const handleDragEnd = () => {
     setDragIndex(null);
     setDragOverIndex(null);
+  };
+
+  // ── History helpers ──
+
+  const refreshHistory = () => {
+    setHistoryEntries(loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []));
+  };
+
+  // Re-load history whenever the panel opens
+  useEffect(() => {
+    if (showHistory) refreshHistory();
+  }, [showHistory]);
+
+  const deleteHistoryEntry = (entry: WorkoutHistoryEntry) => {
+    // Subtract values from aggregated weekly totals
+    const entryDate = new Date(entry.timestamp);
+    const weekKey = getWeekKey(entryDate);
+
+    // Subtract distances
+    const distKey = `workouts-${entry.raceId}-${weekKey}`;
+    const distData = loadFromStorage<Record<string, number>>(distKey, {});
+    for (const [disc, val] of Object.entries(entry.distances)) {
+      distData[disc] = Math.max(0, (distData[disc] || 0) - val);
+    }
+    saveToStorage(distKey, distData);
+
+    // Subtract times
+    const timeKey = `workout-times-${entry.raceId}-${weekKey}`;
+    const timeData = loadFromStorage<Record<string, number>>(timeKey, {});
+    for (const [disc, val] of Object.entries(entry.times)) {
+      timeData[disc] = Math.max(0, (timeData[disc] || 0) - val);
+    }
+    saveToStorage(timeKey, timeData);
+
+    // Also subtract from synced races
+    for (const [disc, val] of Object.entries(entry.distances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === entry.raceId && link.discipline === disc) continue;
+        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
+        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
+        linkedData[link.discipline] = Math.max(0, (linkedData[link.discipline] || 0) - val);
+        saveToStorage(linkedKey, linkedData);
+      }
+    }
+    for (const [disc, val] of Object.entries(entry.times)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === entry.raceId && link.discipline === disc) continue;
+        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
+        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
+        linkedTimeData[link.discipline] = Math.max(0, (linkedTimeData[link.discipline] || 0) - val);
+        saveToStorage(linkedTimeKey, linkedTimeData);
+      }
+    }
+
+    // Remove HR reading
+    if (entry.hr) {
+      const hrKey = `hr-${entry.raceId}-${weekKey}`;
+      const hrs = loadFromStorage<number[]>(hrKey, []);
+      const idx = hrs.indexOf(entry.hr);
+      if (idx >= 0) hrs.splice(idx, 1);
+      saveToStorage(hrKey, hrs);
+    }
+
+    // Remove from history list
+    const allEntries = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+    const updated = allEntries.filter(e => e.id !== entry.id);
+    saveToStorage('workout-history', updated);
+    setHistoryEntries(updated);
+  };
+
+  const startEditEntry = (entry: WorkoutHistoryEntry) => {
+    setEditingEntryId(entry.id);
+    setEditDistances(Object.fromEntries(Object.entries(entry.distances).map(([k, v]) => [k, String(v)])));
+    const formatSecs = (s: number) => {
+      if (s <= 0) return '';
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+      return `${m}:${String(sec).padStart(2, '0')}`;
+    };
+    setEditTimes(Object.fromEntries(Object.entries(entry.times).map(([k, v]) => [k, formatSecs(v)])));
+    setEditHr(entry.hr ? String(entry.hr) : '');
+  };
+
+  const parseTimeInput = (raw: string): number => {
+    if (!raw) return 0;
+    if (raw.includes(':')) {
+      const parts = raw.split(':').map(Number);
+      if (parts.length === 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    }
+    const mins = parseFloat(raw);
+    return isNaN(mins) ? 0 : Math.round(mins * 60);
+  };
+
+  const saveEditEntry = (entry: WorkoutHistoryEntry) => {
+    const entryDate = new Date(entry.timestamp);
+    const weekKey = getWeekKey(entryDate);
+
+    // Calculate deltas (new - old)
+    const newDistances: Record<string, number> = {};
+    for (const [k, v] of Object.entries(editDistances)) {
+      const val = parseFloat(v);
+      if (val > 0) newDistances[k] = val;
+    }
+    const newTimes: Record<string, number> = {};
+    for (const [k, v] of Object.entries(editTimes)) {
+      const secs = parseTimeInput(v);
+      if (secs > 0) newTimes[k] = secs;
+    }
+    const newHr = parseInt(editHr) > 0 ? parseInt(editHr) : undefined;
+
+    // Update aggregated distances
+    const distKey = `workouts-${entry.raceId}-${weekKey}`;
+    const distData = loadFromStorage<Record<string, number>>(distKey, {});
+    for (const disc of new Set([...Object.keys(entry.distances), ...Object.keys(newDistances)])) {
+      const oldVal = entry.distances[disc] || 0;
+      const newVal = newDistances[disc] || 0;
+      distData[disc] = Math.max(0, (distData[disc] || 0) + (newVal - oldVal));
+    }
+    saveToStorage(distKey, distData);
+
+    // Update aggregated times
+    const timeKey = `workout-times-${entry.raceId}-${weekKey}`;
+    const timeData = loadFromStorage<Record<string, number>>(timeKey, {});
+    for (const disc of new Set([...Object.keys(entry.times), ...Object.keys(newTimes)])) {
+      const oldVal = entry.times[disc] || 0;
+      const newVal = newTimes[disc] || 0;
+      timeData[disc] = Math.max(0, (timeData[disc] || 0) + (newVal - oldVal));
+    }
+    saveToStorage(timeKey, timeData);
+
+    // Update synced races
+    for (const disc of new Set([...Object.keys(entry.distances), ...Object.keys(newDistances)])) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      const delta = (newDistances[disc] || 0) - (entry.distances[disc] || 0);
+      if (delta === 0) continue;
+      for (const link of links) {
+        if (link.raceId === entry.raceId && link.discipline === disc) continue;
+        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
+        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
+        linkedData[link.discipline] = Math.max(0, (linkedData[link.discipline] || 0) + delta);
+        saveToStorage(linkedKey, linkedData);
+      }
+    }
+    for (const disc of new Set([...Object.keys(entry.times), ...Object.keys(newTimes)])) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      const delta = (newTimes[disc] || 0) - (entry.times[disc] || 0);
+      if (delta === 0) continue;
+      for (const link of links) {
+        if (link.raceId === entry.raceId && link.discipline === disc) continue;
+        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
+        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
+        linkedTimeData[link.discipline] = Math.max(0, (linkedTimeData[link.discipline] || 0) + delta);
+        saveToStorage(linkedTimeKey, linkedTimeData);
+      }
+    }
+
+    // Update HR
+    if (entry.hr !== newHr) {
+      const hrKey = `hr-${entry.raceId}-${weekKey}`;
+      const hrs = loadFromStorage<number[]>(hrKey, []);
+      if (entry.hr) {
+        const idx = hrs.indexOf(entry.hr);
+        if (idx >= 0) hrs.splice(idx, 1);
+      }
+      if (newHr) hrs.push(newHr);
+      saveToStorage(hrKey, hrs);
+    }
+
+    // Update entry in history
+    const allEntries = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+    const updated = allEntries.map(e =>
+      e.id === entry.id
+        ? { ...e, distances: newDistances, times: newTimes, hr: newHr }
+        : e
+    );
+    saveToStorage('workout-history', updated);
+    setHistoryEntries(updated);
+    setEditingEntryId(null);
   };
 
   const weekKeys = useMemo(() => getPastWeekKeys(8), []);
@@ -650,7 +846,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         <div className="flex items-center gap-3">
           {/* Edit Layout Button */}
           <button
-            onClick={() => setEditingLayout(!editingLayout)}
+            onClick={() => { setEditingLayout(!editingLayout); setShowHistory(false); }}
             className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded-lg border ${
               editingLayout
                 ? 'bg-[#1E6F6B] text-white border-[#1E6F6B]'
@@ -660,7 +856,22 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
             </svg>
-            <span>{editingLayout ? 'Done' : 'Edit Layout'}</span>
+            <span>{editingLayout ? 'Done' : 'Layout'}</span>
+          </button>
+
+          {/* History Button */}
+          <button
+            onClick={() => { setShowHistory(!showHistory); setEditingLayout(false); }}
+            className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded-lg border ${
+              showHistory
+                ? 'bg-[#1E6F6B] text-white border-[#1E6F6B]'
+                : 'glass text-gray-400 hover:text-white hover:bg-white/[0.06]'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>History</span>
           </button>
 
           <button
@@ -789,6 +1000,185 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Workout History Panel */}
+      {showHistory && (
+        <div className="glass p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Workout History</h3>
+            <span className="text-[10px] text-gray-600">{historyEntries.length} workout{historyEntries.length !== 1 ? 's' : ''} logged</span>
+          </div>
+
+          {historyEntries.length === 0 ? (
+            <div className="text-center py-10">
+              <svg className="w-10 h-10 mx-auto text-gray-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-gray-600">No workouts logged yet.</p>
+              <p className="text-xs text-gray-700 mt-1">Log a workout from any race dashboard to see it here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+              {historyEntries.map((entry) => {
+                const race = RACES.find(r => r.id === entry.raceId);
+                const dateObj = new Date(entry.timestamp);
+                const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                const isEditing = editingEntryId === entry.id;
+
+                const fmtTime = (s: number) => {
+                  if (s <= 0) return '0:00';
+                  const h = Math.floor(s / 3600);
+                  const m = Math.floor((s % 3600) / 60);
+                  const sec = s % 60;
+                  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+                  return `${m}:${String(sec).padStart(2, '0')}`;
+                };
+
+                return (
+                  <div key={entry.id} className="border border-white/[0.06] rounded-lg bg-white/[0.02] hover:bg-white/[0.03] transition-colors">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-[#1E6F6B]/10 border border-[#1E6F6B]/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] font-bold text-[#1E6F6B]">{race?.icon || '?'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-white truncate">{race?.name || entry.raceId}</div>
+                          <div className="text-[11px] text-gray-600">{dateStr} at {timeStr}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
+                        {!isEditing && (
+                          <>
+                            <button
+                              onClick={() => startEditEntry(entry)}
+                              className="p-1.5 rounded-md text-gray-600 hover:text-white hover:bg-white/[0.06] transition-colors"
+                              title="Edit workout"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => deleteHistoryEntry(entry)}
+                              className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                              title="Delete workout"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Details */}
+                    {isEditing ? (
+                      <div className="px-4 pb-4 space-y-3 border-t border-white/[0.04] pt-3">
+                        {Object.keys({ ...entry.distances, ...entry.times }).map((disc) => {
+                          const label = DISCIPLINE_LABELS[disc] || disc;
+                          const unit = ['swim'].includes(disc) ? 'km' : ['run', 'bike', 'ride'].includes(disc) ? 'mi' : 'sessions';
+                          return (
+                            <div key={disc} className="flex items-center gap-3 flex-wrap">
+                              <span className="text-xs text-gray-500 uppercase tracking-wider w-20">{label}</span>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={editDistances[disc] || ''}
+                                  onChange={(e) => setEditDistances({ ...editDistances, [disc]: e.target.value })}
+                                  className="w-20 glass-input px-2 py-1.5 text-sm"
+                                  placeholder="0"
+                                />
+                                <span className="text-[10px] text-gray-600">{unit}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editTimes[disc] || ''}
+                                  onChange={(e) => setEditTimes({ ...editTimes, [disc]: e.target.value })}
+                                  className="w-24 glass-input px-2 py-1.5 text-sm"
+                                  placeholder="H:MM:SS"
+                                />
+                                <span className="text-[10px] text-gray-600">time</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {(entry.hr || editHr) && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500 uppercase tracking-wider w-20">HR</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="30"
+                                max="250"
+                                value={editHr}
+                                onChange={(e) => setEditHr(e.target.value)}
+                                className="w-20 glass-input px-2 py-1.5 text-sm"
+                                placeholder="bpm"
+                              />
+                              <span className="text-[10px] text-gray-600">bpm</span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => saveEditEntry(entry)}
+                            className="glow-btn px-4 py-1.5 text-xs font-medium"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingEntryId(null)}
+                            className="px-4 py-1.5 text-xs font-medium text-gray-500 hover:text-white transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-4 pb-3 flex flex-wrap gap-x-4 gap-y-1.5">
+                        {Object.entries(entry.distances).map(([disc, val]) => {
+                          const label = DISCIPLINE_LABELS[disc] || disc;
+                          const unit = ['swim'].includes(disc) ? 'km' : ['run', 'bike', 'ride'].includes(disc) ? 'mi' : 'sessions';
+                          const time = entry.times[disc] || 0;
+                          return (
+                            <div key={disc} className="flex items-baseline gap-1.5">
+                              <span className="text-xs text-gray-600">{label}:</span>
+                              <span className="text-sm font-semibold text-gray-300">{val.toFixed(1)} {unit}</span>
+                              {time > 0 && <span className="text-[11px] text-gray-600">({fmtTime(time)})</span>}
+                            </div>
+                          );
+                        })}
+                        {Object.entries(entry.times).filter(([disc]) => !entry.distances[disc]).map(([disc, val]) => {
+                          const label = DISCIPLINE_LABELS[disc] || disc;
+                          return (
+                            <div key={disc} className="flex items-baseline gap-1.5">
+                              <span className="text-xs text-gray-600">{label}:</span>
+                              <span className="text-sm font-semibold text-gray-300">{fmtTime(val)}</span>
+                            </div>
+                          );
+                        })}
+                        {entry.hr && (
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-xs text-gray-600">HR:</span>
+                            <span className="text-sm font-semibold text-gray-300">{entry.hr} bpm</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
