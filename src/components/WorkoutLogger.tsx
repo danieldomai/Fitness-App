@@ -124,50 +124,60 @@ export default function WorkoutLogger({ raceId }: Props) {
       <div className="glass p-6 space-y-5">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Weekly Workout Log</h3>
 
-        <div className={`grid gap-3 ${disciplines.length > 3 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+        <div className="grid gap-3 grid-cols-1">
           {disciplines.map((d) => {
             const info = DISCIPLINE_LABELS[d] || { label: d, unit: '' };
             return (
-              <div key={d} className="flex items-center bg-white/[0.02] rounded-lg px-3 py-2 min-w-0 gap-2 border border-white/[0.05]">
-                <label className="text-sm font-medium text-gray-400 w-36 shrink-0">{info.label}</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  placeholder="0"
-                  value={inputs[d]}
-                  onChange={(e) => setInputs({ ...inputs, [d]: e.target.value })}
-                  className="w-16 shrink-0 glass-input px-2 py-1.5 text-sm"
-                />
-                <span className="text-xs text-gray-600 shrink-0">{info.unit}</span>
-                <input
-                  type="text"
-                  placeholder="M:SS"
-                  value={timeInputs[d]}
-                  onChange={(e) => setTimeInputs({ ...timeInputs, [d]: e.target.value })}
-                  className="w-16 shrink-0 glass-input px-2 py-1.5 text-sm"
-                />
-                <span className="text-xs text-gray-600 shrink-0">time</span>
+              <div key={d} className="bg-white/[0.02] rounded-lg px-4 py-3 border border-white/[0.05]">
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">{info.label}</label>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="0"
+                      value={inputs[d]}
+                      onChange={(e) => setInputs({ ...inputs, [d]: e.target.value })}
+                      className="w-20 glass-input px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-xs text-gray-600">{info.unit}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="H:MM:SS"
+                      value={timeInputs[d]}
+                      onChange={(e) => setTimeInputs({ ...timeInputs, [d]: e.target.value })}
+                      className="w-24 glass-input px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-xs text-gray-600">time</span>
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
 
-        <div className="flex items-center bg-white/[0.02] border border-white/[0.06] rounded-lg px-3 py-2 min-w-0">
-          <label className="text-sm font-medium text-gray-400 w-36 shrink-0">Avg Heart Rate</label>
-          <input
-            type="number"
-            min="30"
-            max="250"
-            placeholder="bpm"
-            value={hrInput}
-            onChange={(e) => setHrInput(e.target.value)}
-            className="w-20 shrink-0 glass-input px-3 py-1.5 text-sm"
-          />
-          <span className="text-xs text-gray-600 ml-2 shrink-0">bpm</span>
-          {avgHr && (
-            <span className="text-xs text-gray-500 ml-auto shrink-0">Week avg: {avgHr} bpm</span>
-          )}
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg px-4 py-3">
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Avg Heart Rate</label>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="30"
+                max="250"
+                placeholder="bpm"
+                value={hrInput}
+                onChange={(e) => setHrInput(e.target.value)}
+                className="w-20 glass-input px-2 py-1.5 text-sm"
+              />
+              <span className="text-xs text-gray-600">bpm</span>
+            </div>
+            {avgHr && (
+              <span className="text-xs text-gray-500">Week avg: {avgHr} bpm</span>
+            )}
+          </div>
         </div>
 
         <button onClick={handleLog} className="glow-btn px-6 py-2.5 text-sm font-medium">
@@ -182,10 +192,10 @@ export default function WorkoutLogger({ raceId }: Props) {
             const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
             const time = timeTotals[d] || 0;
             return (
-              <div key={d} className="space-y-1">
-                <div className="flex justify-between text-sm">
+              <div key={d} className="space-y-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
                   <span className="font-medium text-gray-400">{info.label}</span>
-                  <span className="text-gray-500">
+                  <span className="text-gray-500 text-right">
                     {current.toFixed(1)} / {goal} {info.unit}
                     {time > 0 && <span className="ml-2 text-gray-600">({formatShortTime(time)})</span>}
                   </span>
@@ -222,7 +232,7 @@ export default function WorkoutLogger({ raceId }: Props) {
                   </div>
                 </div>
                 {hasData ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
                     {disciplines.map((d) => {
                       const info = DISCIPLINE_LABELS[d] || { label: d, unit: '' };
                       const val = data[d] || 0;
@@ -230,15 +240,14 @@ export default function WorkoutLogger({ raceId }: Props) {
                       const time = timeData[d] || 0;
                       if (val === 0 && !isCurrent) return null;
                       return (
-                        <div key={d} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{info.label}</span>
-                          <span className="text-sm font-semibold text-gray-300">
-                            {val.toFixed(1)}{' '}
-                            <span className="text-xs font-normal text-gray-600">/ {goal} {info.unit}</span>
-                            {time > 0 && (
-                              <span className="text-xs font-normal text-gray-600 ml-1">({formatShortTime(time)})</span>
-                            )}
-                          </span>
+                        <div key={d}>
+                          <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-0.5">{info.label}</div>
+                          <div className="text-sm font-semibold text-gray-300">
+                            {val.toFixed(1)} <span className="text-xs font-normal text-gray-600">/ {goal} {info.unit}</span>
+                          </div>
+                          {time > 0 && (
+                            <div className="text-xs text-gray-600">{formatShortTime(time)}</div>
+                          )}
                         </div>
                       );
                     })}
