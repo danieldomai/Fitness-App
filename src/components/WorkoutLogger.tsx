@@ -36,16 +36,6 @@ const DISCIPLINE_LABELS: Record<string, { label: string; unit: string }> = {
   snowboard: { label: 'Snowboard', unit: 'sessions' },
 };
 
-function parseTimeInput(raw: string): number {
-  if (!raw) return 0;
-  if (raw.includes(':')) {
-    const parts = raw.split(':').map(Number);
-    if (parts.length === 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-    return (parts[0] || 0) * 60 + (parts[1] || 0);
-  }
-  const mins = parseFloat(raw);
-  return isNaN(mins) ? 0 : Math.round(mins * 60);
-}
 
 function formatShortTime(seconds: number): string {
   if (seconds <= 0) return '0:00';
