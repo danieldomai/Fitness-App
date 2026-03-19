@@ -7,6 +7,7 @@ import {
 import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
 import type { RaceId } from '../types';
 import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime } from '../utils';
+import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
 
 interface Props {
@@ -229,6 +230,18 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const entryDate = new Date(entry.timestamp);
     const weekKey = getWeekKey(entryDate);
 
+    // Delete from Supabase (async, fire-and-forget for UI speed)
+    deleteWorkoutLogsByTimestamp(entry.timestamp, entry.raceId);
+    // Also delete synced rows for linked races
+    for (const disc of Object.keys(entry.distances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === entry.raceId && link.discipline === disc) continue;
+        deleteWorkoutLogsByTimestamp(entry.timestamp, link.raceId);
+      }
+    }
+
     // Subtract distances
     const distKey = `workouts-${entry.raceId}-${weekKey}`;
     const distData = loadFromStorage<Record<string, number>>(distKey, {});
@@ -387,6 +400,26 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       if (newHr) hrs.push(newHr);
       saveToStorage(hrKey, hrs);
     }
+
+    // Update Supabase rows (delete old + insert new)
+    const DISC_UNITS: Record<string, string> = {
+      run: 'mi', swim: 'km', bike: 'mi', ride: 'mi',
+      skierg: 'sessions', 'sled-push': 'sessions', 'sled-pull': 'sessions',
+      'burpee-broad-jump': 'sessions', rowing: 'sessions',
+      'farmers-carry': 'sessions', 'sandbag-lunges': 'sessions', 'wall-balls': 'sessions',
+      climb: 'sessions', surf: 'sessions', snowboard: 'sessions',
+    };
+    const newRows: WorkoutLogRow[] = [];
+    for (const [disc, val] of Object.entries(newDistances)) {
+      newRows.push({ race: entry.raceId, discipline: disc, distance: val, unit: DISC_UNITS[disc] || 'sessions', logged_at: entry.timestamp, week_start: weekKey });
+    }
+    for (const [disc, secs] of Object.entries(newTimes)) {
+      newRows.push({ race: entry.raceId, discipline: `${disc}_time`, distance: secs, unit: 'seconds', logged_at: entry.timestamp, week_start: weekKey });
+    }
+    if (newHr) {
+      newRows.push({ race: entry.raceId, discipline: 'hr', distance: newHr, unit: 'bpm', logged_at: entry.timestamp, week_start: weekKey });
+    }
+    updateWorkoutLogsByTimestamp(entry.timestamp, entry.raceId, newRows);
 
     // Update entry in history
     const allEntries = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);

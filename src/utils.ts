@@ -1,3 +1,5 @@
+import { cacheGet, cacheSet } from './lib/db';
+
 export function formatTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -49,15 +51,12 @@ export function formatWeekLabel(weekKey: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
+/** Read from in-memory cache (hydrated from Supabase on app start). */
 export function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
+  return cacheGet(key, fallback);
 }
 
+/** Write to in-memory cache + async Supabase sync. */
 export function saveToStorage(key: string, value: unknown): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  cacheSet(key, value);
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { RaceId } from '../types';
 import { WEEKLY_GOALS, SHARED_DISCIPLINES, RACES } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
+import { insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 
 export interface WorkoutHistoryEntry {
   id: string;
@@ -78,16 +79,17 @@ export default function WorkoutLogger({ raceId }: Props) {
   const [hrHistory, setHrHistory] = useState<number[]>(() =>
     loadFromStorage<number[]>(hrStorageKey, [])
   );
+  const [saving, setSaving] = useState(false);
 
   const avgHr = hrHistory.length > 0
     ? Math.round(hrHistory.reduce((a, b) => a + b, 0) / hrHistory.length)
     : null;
 
-  const handleLog = () => {
+  const handleLog = async () => {
+    setSaving(true);
+
     const updated = { ...totals };
     const updatedTime = { ...timeTotals };
-
-    // Collect what was logged this session
     const loggedDistances: Record<string, number> = {};
     const loggedTimes: Record<string, number> = {};
 
@@ -104,6 +106,48 @@ export default function WorkoutLogger({ raceId }: Props) {
       }
     }
 
+    const hr = parseInt(hrInput);
+    const now = new Date().toISOString();
+
+    // ── Build Supabase rows ──
+    const rows: WorkoutLogRow[] = [];
+
+    // Source-race rows
+    for (const [disc, val] of Object.entries(loggedDistances)) {
+      const info = DISCIPLINE_LABELS[disc] || { unit: 'sessions' };
+      rows.push({ race: raceId, discipline: disc, distance: val, unit: info.unit, logged_at: now, week_start: weekKey });
+    }
+    for (const [disc, secs] of Object.entries(loggedTimes)) {
+      rows.push({ race: raceId, discipline: `${disc}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
+    }
+    if (hr > 0) {
+      rows.push({ race: raceId, discipline: 'hr', distance: hr, unit: 'bpm', logged_at: now, week_start: weekKey });
+    }
+
+    // Synced-race rows
+    for (const [disc, val] of Object.entries(loggedDistances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === raceId && link.discipline === disc) continue;
+        const info = DISCIPLINE_LABELS[link.discipline] || { unit: 'sessions' };
+        rows.push({ race: link.raceId, discipline: link.discipline, distance: val, unit: info.unit, logged_at: now, week_start: weekKey });
+      }
+    }
+    for (const [disc, secs] of Object.entries(loggedTimes)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === raceId && link.discipline === disc) continue;
+        rows.push({ race: link.raceId, discipline: `${link.discipline}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
+      }
+    }
+
+    // Insert into Supabase
+    await insertWorkoutLogs(rows);
+
+    // ── Update local cache (same as before, for immediate UI) ──
+
     setTotals(updated);
     saveToStorage(storageKey, updated);
     setInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
@@ -112,12 +156,12 @@ export default function WorkoutLogger({ raceId }: Props) {
     saveToStorage(timeStorageKey, updatedTime);
     setTimeInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
 
-    // Sync to linked races
+    // Sync caches for linked races
     for (const [disc, val] of Object.entries(loggedDistances)) {
       const links = SHARED_DISCIPLINES[disc];
       if (!links) continue;
       for (const link of links) {
-        if (link.raceId === raceId && link.discipline === disc) continue; // skip self
+        if (link.raceId === raceId && link.discipline === disc) continue;
         const linkedKey = `workouts-${link.raceId}-${weekKey}`;
         const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
         linkedData[link.discipline] = (linkedData[link.discipline] || 0) + val;
@@ -136,7 +180,6 @@ export default function WorkoutLogger({ raceId }: Props) {
       }
     }
 
-    const hr = parseInt(hrInput);
     if (hr > 0) {
       const updatedHr = [...hrHistory, hr];
       setHrHistory(updatedHr);
@@ -144,13 +187,13 @@ export default function WorkoutLogger({ raceId }: Props) {
       setHrInput('');
     }
 
-    // Save individual history entry (for the global History panel)
+    // Update history cache
     const hasAnyData = Object.keys(loggedDistances).length > 0 || Object.keys(loggedTimes).length > 0 || (hr > 0);
     if (hasAnyData) {
       const historyEntries = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
       historyEntries.unshift({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
         raceId,
         distances: loggedDistances,
         times: loggedTimes,
@@ -158,6 +201,8 @@ export default function WorkoutLogger({ raceId }: Props) {
       });
       saveToStorage('workout-history', historyEntries);
     }
+
+    setSaving(false);
   };
 
   const pastWeeks = getPastWeekKeys(5);
@@ -243,8 +288,8 @@ export default function WorkoutLogger({ raceId }: Props) {
           </div>
         </div>
 
-        <button onClick={handleLog} className="glow-btn px-6 py-2.5 text-sm font-medium">
-          Log Workout
+        <button onClick={handleLog} disabled={saving} className="glow-btn px-6 py-2.5 text-sm font-medium disabled:opacity-50">
+          {saving ? 'Saving…' : 'Log Workout'}
         </button>
 
         <div className="space-y-3 pt-2">
