@@ -29,6 +29,9 @@ const DISCIPLINE_LABELS: Record<string, { label: string; unit: string }> = {
   'sandbag-lunges': { label: 'Sandbag Lunges', unit: 'sessions' },
   'wall-balls': { label: 'Wall Balls', unit: 'sessions' },
   ride: { label: 'Cycle', unit: 'mi' },
+  climb: { label: 'Climb', unit: 'sessions' },
+  surf: { label: 'Surf', unit: 'sessions' },
+  snowboard: { label: 'Snowboard', unit: 'sessions' },
 };
 
 function parseTimeInput(raw: string): number {

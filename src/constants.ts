@@ -1,12 +1,17 @@
 import type { Race, RaceId, ReferenceRow, HyroxStation } from './types';
 
 export const RACES: Race[] = [
-  { id: 'half-marathon', name: 'Half Marathon', icon: 'HM', description: '13.1 miles' },
-  { id: 'marathon', name: 'Marathon', icon: 'M', description: '26.2 miles' },
-  { id: 'hyrox', name: 'Hyrox', icon: 'HX', description: '8 stations + 8km run' },
-  { id: 'ironman-70.3', name: 'Ironman 70.3', icon: '70.3', description: 'Swim + Bike + Run' },
-  { id: 'ironman-140.6', name: 'Ironman 140.6', icon: '140.6', description: 'Full Ironman' },
-  { id: 'cycling', name: 'Cycling', icon: 'CY', description: 'Road & indoor riding' },
+  { id: 'half-marathon', name: 'Half Marathon', icon: 'HM', description: '13.1 miles', category: 'race' },
+  { id: 'marathon', name: 'Marathon', icon: 'M', description: '26.2 miles', category: 'race' },
+  { id: 'hyrox', name: 'Hyrox', icon: 'HX', description: '8 stations + 8km run', category: 'race' },
+  { id: 'ironman-70.3', name: 'Ironman 70.3', icon: '70.3', description: 'Swim + Bike + Run', category: 'race' },
+  { id: 'ironman-140.6', name: 'Ironman 140.6', icon: '140.6', description: 'Full Ironman', category: 'race' },
+  { id: 'running', name: 'Running', icon: 'RN', description: 'General running & trail', category: 'workout' },
+  { id: 'swimming', name: 'Swimming', icon: 'SW', description: 'Pool & open water', category: 'workout' },
+  { id: 'cycling', name: 'Cycling', icon: 'CY', description: 'Road & indoor riding', category: 'workout' },
+  { id: 'climbing', name: 'Climbing', icon: 'CL', description: 'Bouldering & sport climbing', category: 'workout' },
+  { id: 'surfing', name: 'Surfing', icon: 'SF', description: 'Ocean & wave sports', category: 'workout' },
+  { id: 'snowboarding', name: 'Snowboarding', icon: 'SB', description: 'Mountain & park riding', category: 'workout' },
 ];
 
 export const RACE_STATS: Record<string, { distance: string; worldRecord: string; cutoff: string; avgFinisher: string }> = {
@@ -117,6 +122,11 @@ export const WEEKLY_GOALS: Record<RaceId, Record<string, number>> = {
   'ironman-70.3': { run: 20, swim: 5, bike: 80 },
   'ironman-140.6': { run: 30, swim: 8, bike: 120 },
   'cycling': { ride: 100 },
+  'running': { run: 25 },
+  'swimming': { swim: 10 },
+  'climbing': { climb: 5 },
+  'surfing': { surf: 4 },
+  'snowboarding': { snowboard: 4 },
 };
 
 // Shared discipline links: when logging a workout in one race,
@@ -129,10 +139,12 @@ export const SHARED_DISCIPLINES: Record<string, { raceId: RaceId; discipline: st
     { raceId: 'hyrox', discipline: 'run' },
     { raceId: 'ironman-70.3', discipline: 'run' },
     { raceId: 'ironman-140.6', discipline: 'run' },
+    { raceId: 'running', discipline: 'run' },
   ],
   swim: [
     { raceId: 'ironman-70.3', discipline: 'swim' },
     { raceId: 'ironman-140.6', discipline: 'swim' },
+    { raceId: 'swimming', discipline: 'swim' },
   ],
   bike: [
     { raceId: 'ironman-70.3', discipline: 'bike' },

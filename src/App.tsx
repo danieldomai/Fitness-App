@@ -8,6 +8,7 @@ import RunRaceDashboard from './components/RunRaceDashboard';
 import HyroxDashboard from './components/HyroxDashboard';
 import TriathlonDashboard from './components/TriathlonDashboard';
 import CyclingDashboard from './components/CyclingDashboard';
+import GenericWorkoutDashboard from './components/GenericWorkoutDashboard';
 
 type View = 'home' | 'breakdown' | 'race';
 
@@ -60,6 +61,9 @@ export default function App() {
             <TriathlonDashboard key={activeRace} raceId={activeRace} />
           )}
           {activeRace === 'cycling' && <CyclingDashboard />}
+          {(activeRace === 'running' || activeRace === 'swimming' || activeRace === 'climbing' || activeRace === 'surfing' || activeRace === 'snowboarding') && (
+            <GenericWorkoutDashboard key={activeRace} raceId={activeRace} />
+          )}
         </main>
       )}
     </div>

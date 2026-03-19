@@ -19,7 +19,21 @@ export default function NavBar({ activeRace, onSelect, onHome }: Props) {
             Home
           </button>
           <div className="w-px h-5 bg-white/[0.08] mx-1" />
-          {RACES.map((race) => (
+          {RACES.filter((r) => r.category === 'race').map((race) => (
+            <button
+              key={race.id}
+              onClick={() => onSelect(race.id)}
+              className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeRace === race.id
+                  ? 'bg-[#1E6F6B] text-white'
+                  : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              {race.name}
+            </button>
+          ))}
+          <div className="w-px h-5 bg-white/[0.08] mx-1" />
+          {RACES.filter((r) => r.category === 'workout').map((race) => (
             <button
               key={race.id}
               onClick={() => onSelect(race.id)}

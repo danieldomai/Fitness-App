@@ -43,6 +43,7 @@ const DISCIPLINE_LABELS: Record<string, string> = {
   skierg: 'SkiErg', 'sled-push': 'Sled Push', 'sled-pull': 'Sled Pull',
   'burpee-broad-jump': 'Burpee BJ', rowing: 'Rowing',
   'farmers-carry': 'Farmers Carry', 'sandbag-lunges': 'Lunges', 'wall-balls': 'Wall Balls',
+  climb: 'Climb', surf: 'Surf', snowboard: 'Snowboard',
 };
 
 // Chart-only colors: purposeful, limited palette for data visualization
@@ -59,6 +60,9 @@ const CHART_COLORS: Record<string, string> = {
   'farmers-carry': '#10B981',
   'sandbag-lunges': '#EAB308',
   'wall-balls': '#EC4899',
+  climb: '#84CC16',
+  surf: '#22D3EE',
+  snowboard: '#A78BFA',
 };
 
 const QUOTES = [
@@ -889,7 +893,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="glow-btn px-5 py-2.5 text-sm font-medium flex items-center gap-2"
             >
-              <span>Race Dashboard</span>
+              <span>Dashboard</span>
               <svg
                 className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -898,8 +902,27 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </svg>
             </button>
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 glass-elevated rounded-lg overflow-hidden shadow-2xl z-50">
-                {RACES.map((race) => (
+              <div className="absolute right-0 mt-2 w-64 glass-elevated rounded-lg overflow-hidden shadow-2xl z-50">
+                <div className="px-4 pt-3 pb-1">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Races</span>
+                </div>
+                {RACES.filter((r) => r.category === 'race').map((race) => (
+                  <button
+                    key={race.id}
+                    onClick={() => { onSelect(race.id); setDropdownOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.06] transition-colors border-b border-white/[0.04]"
+                  >
+                    <span className="text-xs font-bold text-gray-500 w-8">{race.icon}</span>
+                    <div>
+                      <div className="text-sm font-medium text-white">{race.name}</div>
+                      <div className="text-[10px] text-gray-600">{race.description}</div>
+                    </div>
+                  </button>
+                ))}
+                <div className="px-4 pt-3 pb-1 border-t border-white/[0.06]">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Workouts</span>
+                </div>
+                {RACES.filter((r) => r.category === 'workout').map((race) => (
                   <button
                     key={race.id}
                     onClick={() => { onSelect(race.id); setDropdownOpen(false); }}

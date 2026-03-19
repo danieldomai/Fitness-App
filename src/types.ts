@@ -1,10 +1,11 @@
-export type RaceId = 'half-marathon' | 'marathon' | 'hyrox' | 'ironman-70.3' | 'ironman-140.6' | 'cycling';
+export type RaceId = 'half-marathon' | 'marathon' | 'hyrox' | 'ironman-70.3' | 'ironman-140.6' | 'cycling' | 'running' | 'swimming' | 'climbing' | 'surfing' | 'snowboarding';
 
 export interface Race {
   id: RaceId;
   name: string;
   icon: string;
   description: string;
+  category?: 'race' | 'workout';
 }
 
 export interface ReferenceRow {
