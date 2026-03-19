@@ -997,17 +997,17 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
 
   const renderDistanceTable = () => {
-    const rows = aggregatedData.distanceTable.filter(r => activeRaces.includes(r.raceId as RaceId));
-    if (rows.length === 0) {
-      return (
-        <div className="glass p-5 space-y-3">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Weekly Distances</h3>
-          <div className="flex items-center justify-center" style={{ height: 80 }}>
-            <div className="text-xs text-gray-600">No active races to show</div>
-          </div>
-        </div>
-      );
-    }
+    const WORKOUT_IDS = new Set(['running', 'swimming', 'cycling', 'climbing', 'surfing', 'snowboarding']);
+    const workoutRows = aggregatedData.distanceTable
+      .filter(r => WORKOUT_IDS.has(r.raceId) && activeRaces.includes(r.raceId as RaceId));
+    if (workoutRows.length === 0) return null;
+
+    // Flatten to one column per workout (use first discipline's distance)
+    const columns = workoutRows.map(r => {
+      const d = r.disciplines[0];
+      return { name: r.name, done: d?.done ?? 0, unit: d?.unit ?? '' };
+    });
+
     return (
       <div className="glass p-5 space-y-3">
         <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
@@ -1015,58 +1015,23 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
-                <th className="text-left text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Activity</th>
-                <th className="text-left text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Discipline</th>
-                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Done</th>
-                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Goal</th>
-                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2">Progress</th>
+                {columns.map(c => (
+                  <th key={c.name} className="text-center text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 px-4">
+                    {c.name}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((race) =>
-                race.disciplines.map((d, i) => {
-                  const pct = d.goal > 0 ? Math.min(100, Math.round((d.done / d.goal) * 100)) : 0;
-                  return (
-                    <tr key={`${race.raceId}-${d.disc}`} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                      {i === 0 ? (
-                        <td rowSpan={race.disciplines.length} className="py-2.5 pr-4 align-top">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-gray-500">{race.icon}</span>
-                            <span className="text-xs font-medium text-gray-300">{race.name}</span>
-                          </div>
-                        </td>
-                      ) : null}
-                      <td className="py-2.5 pr-4">
-                        <span className="text-xs text-gray-400">{d.label}</span>
-                      </td>
-                      <td className="py-2.5 pr-4 text-right">
-                        <span className={`text-xs font-semibold ${d.done > 0 ? 'text-white' : 'text-gray-600'}`}>
-                          {d.done} {d.unit}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-4 text-right">
-                        <span className="text-xs text-gray-500">{d.goal} {d.unit}</span>
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${pct}%`,
-                                backgroundColor: pct >= 100 ? '#34C759' : pct >= 50 ? '#CCF472' : 'rgba(255,255,255,0.15)',
-                              }}
-                            />
-                          </div>
-                          <span className={`text-[10px] font-semibold w-8 text-right ${pct >= 100 ? 'text-[#34C759]' : pct >= 50 ? 'text-[#CCF472]' : 'text-gray-500'}`}>
-                            {pct}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              <tr>
+                {columns.map(c => (
+                  <td key={c.name} className="text-center py-3 px-4">
+                    <span className={`text-sm font-semibold ${c.done > 0 ? 'text-white' : 'text-gray-600'}`}>
+                      {c.done} {c.unit}
+                    </span>
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
