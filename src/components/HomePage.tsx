@@ -32,9 +32,12 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'profile', label: 'Athlete Profile', visible: true },
   { id: 'recovery', label: 'Recovery Status', visible: true },
   { id: 'quick-stats', label: 'Quick Stats', visible: true },
-  { id: 'volume', label: 'Volume Trend (Line)', visible: true },
-  { id: 'volume-bar', label: 'Volume Breakdown (Bar)', visible: true },
-  { id: 'distribution', label: 'Training Distribution (Pie)', visible: true },
+  { id: 'race-volume', label: 'Race Volume Trend (Line)', visible: true },
+  { id: 'race-bar', label: 'Race Volume Breakdown (Bar)', visible: true },
+  { id: 'race-distribution', label: 'Race Distribution (Pie)', visible: true },
+  { id: 'workout-volume', label: 'Workout Volume Trend (Line)', visible: true },
+  { id: 'workout-bar', label: 'Workout Volume Breakdown (Bar)', visible: true },
+  { id: 'workout-distribution', label: 'Workout Distribution (Pie)', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
 
@@ -401,37 +404,90 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const currentWeekKey = weekKeys[0];
 
   const aggregatedData = useMemo(() => {
-    const allRaceIds: RaceId[] = ['half-marathon', 'marathon', 'hyrox', 'ironman-70.3', 'ironman-140.6', 'cycling'];
+    const raceIds: RaceId[] = ['half-marathon', 'marathon', 'hyrox', 'ironman-70.3', 'ironman-140.6'];
+    const workoutIds: RaceId[] = ['running', 'swimming', 'cycling', 'climbing', 'surfing', 'snowboarding'];
+    const allIds: RaceId[] = [...raceIds, ...workoutIds];
 
     // Normalize keys: ride → bike (both display as "Cycle")
     const NORM: Record<string, string> = { ride: 'bike' };
     const norm = (d: string) => NORM[d] || d;
 
-    // Canonical source for shared disciplines — only read from one race to avoid double-counting synced data
-    const CANONICAL: Record<string, RaceId> = {
+    // Canonical source for shared disciplines — only read from one source to avoid double-counting synced data
+    const RACE_CANONICAL: Record<string, RaceId> = {
       run: 'half-marathon',
       swim: 'ironman-70.3',
       bike: 'ironman-70.3',
       ride: 'cycling',
     };
 
-    const weeklyByDiscipline: Record<string, number>[] = [];
-    const allDiscsSeen = new Set<string>();
-    const totalByDiscipline: Record<string, number> = {};
+    const WORKOUT_CANONICAL: Record<string, RaceId> = {
+      run: 'running',
+      swim: 'swimming',
+      bike: 'cycling',
+      ride: 'cycling',
+    };
 
+    // Helper to aggregate chart data for a set of IDs with a given canonical map
+    const aggregateChartData = (ids: RaceId[], canonical: Record<string, RaceId>) => {
+      const weeklyByDisc: Record<string, number>[] = [];
+      const discsSeen = new Set<string>();
+      const totalByDisc: Record<string, number> = {};
+
+      for (const wk of weekKeys) {
+        const weekDisc: Record<string, number> = {};
+        for (const raceId of ids) {
+          const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${wk}`, {});
+          for (const [disc, val] of Object.entries(distances)) {
+            if (val <= 0) continue;
+            const key = norm(disc);
+            if (canonical[disc] && canonical[disc] !== raceId) continue;
+            weekDisc[key] = (weekDisc[key] || 0) + val;
+            totalByDisc[key] = (totalByDisc[key] || 0) + val;
+            discsSeen.add(key);
+          }
+        }
+        weeklyByDisc.push(weekDisc);
+      }
+
+      const lineData = weekKeys.map((wk, i) => {
+        const row: Record<string, string | number> = { label: wk.slice(5) };
+        for (const disc of discsSeen) {
+          row[disc] = weeklyByDisc[i]?.[disc] || 0;
+        }
+        return row;
+      }).reverse();
+
+      const totalVol = Object.values(totalByDisc).reduce((a, b) => a + b, 0);
+      const pieData = Object.entries(totalByDisc)
+        .sort((a, b) => b[1] - a[1])
+        .map(([disc, val]) => ({
+          name: DISCIPLINE_LABELS[disc] || disc,
+          value: val,
+          pct: totalVol > 0 ? Math.round((val / totalVol) * 1000) / 10 : 0,
+          color: CHART_COLORS[disc] || '#6B7280',
+        }));
+
+      return { lineData, activeDisciplines: Array.from(discsSeen), pieData, weeklyByDisc };
+    };
+
+    const raceChart = aggregateChartData(raceIds, RACE_CANONICAL);
+    const workoutChart = aggregateChartData(workoutIds, WORKOUT_CANONICAL);
+
+    // Combined stats using all IDs with race canonical map for dedup
     let totalWorkoutTime = 0;
     let totalDistance = 0;
     const allHrReadings: number[] = [];
     let totalSessions = 0;
     let lastWorkoutDate = '';
+    const combinedWeeklyByDisc: Record<string, number>[] = [];
 
     for (const wk of weekKeys) {
       let weekTime = 0;
       const weekHrs: number[] = [];
       const weekDisc: Record<string, number> = {};
-      const weekSessions = new Set<string>(); // track unique discipline sessions
+      const weekSessionsSet = new Set<string>();
 
-      for (const raceId of allRaceIds) {
+      for (const raceId of allIds) {
         const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${wk}`, {});
         const times = loadFromStorage<Record<string, number>>(`workout-times-${raceId}-${wk}`, {});
         const hrs = loadFromStorage<number[]>(`hr-${raceId}-${wk}`, []);
@@ -439,54 +495,29 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         for (const [disc, val] of Object.entries(distances)) {
           if (val <= 0) continue;
           const key = norm(disc);
-
-          // For shared disciplines, only count from the canonical race
-          if (CANONICAL[disc] && CANONICAL[disc] !== raceId) continue;
-
+          if (RACE_CANONICAL[disc] && RACE_CANONICAL[disc] !== raceId) continue;
           weekDisc[key] = (weekDisc[key] || 0) + val;
-          totalByDiscipline[key] = (totalByDiscipline[key] || 0) + val;
           totalDistance += val;
-          allDiscsSeen.add(key);
-          weekSessions.add(key);
+          weekSessionsSet.add(key);
           if (!lastWorkoutDate || wk > lastWorkoutDate) lastWorkoutDate = wk;
         }
         for (const [disc, val] of Object.entries(times)) {
           if (val <= 0) continue;
-          // Same dedup for time
-          if (CANONICAL[disc] && CANONICAL[disc] !== raceId) continue;
+          if (RACE_CANONICAL[disc] && RACE_CANONICAL[disc] !== raceId) continue;
           weekTime += val;
         }
         weekHrs.push(...hrs);
       }
 
       totalWorkoutTime += weekTime;
-      totalSessions += weekSessions.size;
+      totalSessions += weekSessionsSet.size;
       allHrReadings.push(...weekHrs);
-      weeklyByDiscipline.push(weekDisc);
+      combinedWeeklyByDisc.push(weekDisc);
     }
 
-    const weeklyLineData = weekKeys.map((wk, i) => {
-      const row: Record<string, string | number> = { label: wk.slice(5) };
-      for (const disc of allDiscsSeen) {
-        row[disc] = weeklyByDiscipline[i]?.[disc] || 0;
-      }
-      return row;
-    }).reverse();
-
-    // Pie chart data: distribution of total volume by discipline
-    const totalVolume = Object.values(totalByDiscipline).reduce((a, b) => a + b, 0);
-    const pieData = Object.entries(totalByDiscipline)
-      .sort((a, b) => b[1] - a[1])
-      .map(([disc, val]) => ({
-        name: DISCIPLINE_LABELS[disc] || disc,
-        value: val,
-        pct: totalVolume > 0 ? Math.round((val / totalVolume) * 1000) / 10 : 0,
-        color: CHART_COLORS[disc] || '#6B7280',
-      }));
-
-    const currentWeekTime = weeklyByDiscipline[0] ? Object.values(weeklyByDiscipline[0]).reduce((a, b) => a + b, 0) : 0;
-    const prevWeekTime = weeklyByDiscipline[1] ? Object.values(weeklyByDiscipline[1]).reduce((a, b) => a + b, 0) : 0;
-    const volumeRatio = prevWeekTime > 0 ? currentWeekTime / prevWeekTime : 0.5;
+    const currentWeekVol = combinedWeeklyByDisc[0] ? Object.values(combinedWeeklyByDisc[0]).reduce((a, b) => a + b, 0) : 0;
+    const prevWeekVol = combinedWeeklyByDisc[1] ? Object.values(combinedWeeklyByDisc[1]).reduce((a, b) => a + b, 0) : 0;
+    const volumeRatio = prevWeekVol > 0 ? currentWeekVol / prevWeekVol : 0.5;
     const avgHr = allHrReadings.length > 0 ? allHrReadings.reduce((a, b) => a + b, 0) / allHrReadings.length : 0;
     const daysSinceLastWorkout = lastWorkoutDate
       ? Math.max(0, Math.floor((Date.now() - new Date(lastWorkoutDate + 'T00:00:00').getTime()) / 86400000))
@@ -505,20 +536,24 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const recoveryLabel = recoveryScore >= 80 ? 'Fully Recovered' : recoveryScore >= 60 ? 'Moderately Recovered' : recoveryScore >= 40 ? 'Fatigued' : 'High Fatigue';
     const recoveryColor = recoveryScore >= 80 ? '#34C759' : recoveryScore >= 60 ? '#F59E0B' : recoveryScore >= 40 ? '#F97316' : '#EF4444';
 
-    const raceProgress = allRaceIds.map((raceId) => {
+    const raceProgress = allIds.map((raceId) => {
       const goals = WEEKLY_GOALS[raceId];
+      if (!goals) return null;
       const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${currentWeekKey}`, {});
       const totalGoal = Object.values(goals).reduce((a, b) => a + b, 0);
       const totalDone = Object.entries(goals).reduce((sum, [disc]) => sum + (distances[disc] || 0), 0);
       const pct = totalGoal > 0 ? Math.min(100, Math.round((totalDone / totalGoal) * 100)) : 0;
       const race = RACES.find(r => r.id === raceId)!;
       return { raceId, name: race.name, icon: race.icon, pct };
-    });
+    }).filter(Boolean) as { raceId: string; name: string; icon: string; pct: number }[];
 
     return {
-      weeklyLineData,
-      activeDisciplines: Array.from(allDiscsSeen),
-      pieData,
+      raceLineData: raceChart.lineData,
+      raceActiveDisciplines: raceChart.activeDisciplines,
+      racePieData: raceChart.pieData,
+      workoutLineData: workoutChart.lineData,
+      workoutActiveDisciplines: workoutChart.activeDisciplines,
+      workoutPieData: workoutChart.pieData,
       totalDistance: Math.round(totalDistance),
       totalWorkoutTime,
       totalSessions,
@@ -656,13 +691,13 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     </div>
   );
 
-  const renderVolumeLine = () => (
+  const renderLineChart = (title: string, lineData: Record<string, string | number>[], disciplines: string[], emptyMsg: string) => (
     <div className="glass p-5 space-y-3">
-      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Volume Trend</h3>
-      {aggregatedData.activeDisciplines.length > 0 ? (
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
+      {disciplines.length > 0 ? (
         <div style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={aggregatedData.weeklyLineData}>
+            <LineChart data={lineData}>
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={35} />
               <Tooltip contentStyle={tooltipStyle} labelFormatter={(label) => `Week of ${label}`}
@@ -672,7 +707,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                   return [`${value} ${unit}`, label];
                 }} />
               <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />
-              {aggregatedData.activeDisciplines.map((disc) => (
+              {disciplines.map((disc) => (
                 <Line key={disc} type="monotone" dataKey={disc} stroke={CHART_COLORS[disc] || '#6B7280'} strokeWidth={2}
                   dot={{ fill: CHART_COLORS[disc] || '#6B7280', strokeWidth: 0, r: 2.5 }}
                   activeDot={{ stroke: CHART_COLORS[disc] || '#6B7280', strokeWidth: 3, r: 4, strokeOpacity: 0.3 }}
@@ -683,19 +718,19 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         </div>
       ) : (
         <div className="flex items-center justify-center" style={{ height: 220 }}>
-          <div className="text-xs text-gray-600">Log workouts to see your volume trends</div>
+          <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
     </div>
   );
 
-  const renderVolumeBar = () => (
+  const renderBarChart = (title: string, lineData: Record<string, string | number>[], disciplines: string[], emptyMsg: string) => (
     <div className="glass p-5 space-y-3">
-      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Weekly Volume Breakdown</h3>
-      {aggregatedData.activeDisciplines.length > 0 ? (
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
+      {disciplines.length > 0 ? (
         <div style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={aggregatedData.weeklyLineData}>
+            <BarChart data={lineData}>
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 11 }} width={35} />
               <Tooltip
@@ -708,7 +743,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 }}
               />
               <Legend formatter={(value: string) => DISCIPLINE_LABELS[value] || value} wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }} />
-              {aggregatedData.activeDisciplines.map((disc) => (
+              {disciplines.map((disc) => (
                 <Bar key={disc} dataKey={disc} fill={CHART_COLORS[disc] || '#6B7280'} radius={[3, 3, 0, 0]} stackId="stack" />
               ))}
             </BarChart>
@@ -716,22 +751,22 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         </div>
       ) : (
         <div className="flex items-center justify-center" style={{ height: 220 }}>
-          <div className="text-xs text-gray-600">Log workouts to see your volume breakdown</div>
+          <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
     </div>
   );
 
-  const renderDistribution = () => (
+  const renderPieChart = (title: string, pieData: { name: string; value: number; pct: number; color: string }[], emptyMsg: string) => (
     <div className="glass p-5 space-y-3">
-      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Training Distribution</h3>
-      {aggregatedData.pieData.length > 0 ? (
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
+      {pieData.length > 0 ? (
         <div className="flex flex-col lg:flex-row items-center gap-6">
           <div style={{ width: 200, height: 200 }} className="flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={aggregatedData.pieData}
+                  data={pieData}
                   cx="50%"
                   cy="50%"
                   innerRadius={55}
@@ -740,7 +775,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                   dataKey="value"
                   strokeWidth={0}
                 >
-                  {aggregatedData.pieData.map((entry, index) => (
+                  {pieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -752,7 +787,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             </ResponsiveContainer>
           </div>
           <div className="flex-1 space-y-2 w-full">
-            {aggregatedData.pieData.map((entry) => (
+            {pieData.map((entry) => (
               <div key={entry.name} className="flex items-center gap-3">
                 <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
                 <span className="text-sm text-gray-400 flex-1">{entry.name}</span>
@@ -763,11 +798,18 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         </div>
       ) : (
         <div className="flex items-center justify-center" style={{ height: 200 }}>
-          <div className="text-xs text-gray-600">Log workouts to see your training distribution</div>
+          <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
     </div>
   );
+
+  const renderRaceVolumeLine = () => renderLineChart('Race Volume Trend', aggregatedData.raceLineData, aggregatedData.raceActiveDisciplines, 'Log race workouts to see volume trends');
+  const renderRaceVolumeBar = () => renderBarChart('Race Volume Breakdown', aggregatedData.raceLineData, aggregatedData.raceActiveDisciplines, 'Log race workouts to see volume breakdown');
+  const renderRaceDistribution = () => renderPieChart('Race Distribution', aggregatedData.racePieData, 'Log race workouts to see distribution');
+  const renderWorkoutVolumeLine = () => renderLineChart('Workout Volume Trend', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume trends');
+  const renderWorkoutVolumeBar = () => renderBarChart('Workout Volume Breakdown', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume breakdown');
+  const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
 
   const renderRaceProgress = () => (
     <div className="glass p-5 space-y-4">
@@ -823,9 +865,12 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     'profile': renderProfile,
     'recovery': renderRecovery,
     'quick-stats': renderQuickStats,
-    'volume': renderVolumeLine,
-    'volume-bar': renderVolumeBar,
-    'distribution': renderDistribution,
+    'race-volume': renderRaceVolumeLine,
+    'race-bar': renderRaceVolumeBar,
+    'race-distribution': renderRaceDistribution,
+    'workout-volume': renderWorkoutVolumeLine,
+    'workout-bar': renderWorkoutVolumeBar,
+    'workout-distribution': renderWorkoutDistribution,
     'race-progress': renderRaceProgress,
   };
 
