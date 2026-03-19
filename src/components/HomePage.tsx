@@ -724,6 +724,26 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const recoveryLabel = recoveryScore >= 80 ? 'Fully Recovered' : recoveryScore >= 60 ? 'Moderately Recovered' : recoveryScore >= 40 ? 'Fatigued' : 'High Fatigue';
     const recoveryColor = recoveryScore >= 80 ? '#34C759' : recoveryScore >= 60 ? '#F59E0B' : recoveryScore >= 40 ? '#F97316' : '#EF4444';
 
+    // Estimate hours until full recovery (score 80+)
+    let recoveryEta: string;
+    if (recoveryScore >= 80) {
+      recoveryEta = 'Fully recovered';
+    } else {
+      const deficit = 80 - recoveryScore;
+      // ~4 points recovered per hour of rest, adjusted by recent activity
+      const ratePerHour = daysSinceLastWorkout >= 1 ? 4 : 2.5;
+      const hoursToRecover = Math.ceil(deficit / ratePerHour);
+      if (hoursToRecover < 1) {
+        recoveryEta = '< 1 hour';
+      } else if (hoursToRecover < 24) {
+        recoveryEta = `~${hoursToRecover}h`;
+      } else {
+        const days = Math.floor(hoursToRecover / 24);
+        const remainHours = hoursToRecover % 24;
+        recoveryEta = remainHours > 0 ? `~${days}d ${remainHours}h` : `~${days}d`;
+      }
+    }
+
     const raceProgress = allIds.map((raceId) => {
       const goals = getGoals(raceId);
       if (!goals) return null;
@@ -763,6 +783,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       recoveryScore,
       recoveryLabel,
       recoveryColor,
+      recoveryEta,
       daysSinceLastWorkout,
       raceProgress,
       distanceTable,
@@ -872,6 +893,14 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       <div className="text-xs text-gray-600">
         {aggregatedData.daysSinceLastWorkout === 0 ? 'Trained today' : aggregatedData.daysSinceLastWorkout === 1 ? '1 day since last workout' : `${aggregatedData.daysSinceLastWorkout} days since last workout`}
       </div>
+      {aggregatedData.recoveryScore < 80 && (
+        <div className="flex items-center gap-1.5 mt-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span className="text-xs text-gray-500">Est. full recovery: <span className="text-white font-medium">{aggregatedData.recoveryEta}</span></span>
+        </div>
+      )}
     </div>
   );
 
