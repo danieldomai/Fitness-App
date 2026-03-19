@@ -6,6 +6,7 @@ import StatsCard from './StatsCard';
 import LevelTimeline from './LevelTimeline';
 import WorkoutLogger from './WorkoutLogger';
 import NutritionInsights from './NutritionInsights';
+import ActivityCharts from './ActivityCharts';
 
 export default function HyroxDashboard() {
   const [gender, setGender] = useState<Gender>(() => loadFromStorage('hyrox-gender', 'men'));
@@ -179,9 +180,11 @@ export default function HyroxDashboard() {
         )}
       </div>
 
-      <NutritionInsights estimatedSeconds={goalSeconds} raceType="hyrox" />
-
       <WorkoutLogger raceId="hyrox" />
+
+      <ActivityCharts raceId="hyrox" />
+
+      <NutritionInsights estimatedSeconds={goalSeconds} raceType="hyrox" />
     </div>
   );
 }
