@@ -16,7 +16,7 @@ export default function App() {
   const [activeRace, setActiveRace] = useState<RaceId | null>(() =>
     loadFromStorage<RaceId | null>('active-race', null)
   );
-  const [view, setView] = useState<View>(() => activeRace ? 'race' : 'home');
+  const [view, setView] = useState<View>('home');
 
   const handleRaceSelect = (id: RaceId) => {
     setActiveRace(id);

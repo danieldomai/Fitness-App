@@ -115,6 +115,10 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [navFavorites, setNavFavorites] = useState<RaceId[]>(() =>
     loadFromStorage<RaceId[]>('nav-favorites', [])
   );
+  // Workout weekly goal slider (miles)
+  const [workoutGoal, setWorkoutGoal] = useState<number>(() =>
+    loadFromStorage<number>('workout-weekly-goal', 25)
+  );
   // Quick-input state
   const [quickInputRace, setQuickInputRace] = useState<RaceId | ''>('');
   const [quickInputValues, setQuickInputValues] = useState<Record<string, string>>({});
@@ -578,6 +582,17 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const workoutIds: RaceId[] = ['running', 'swimming', 'cycling', 'climbing', 'surfing', 'snowboarding'];
     const allIds: RaceId[] = [...raceIds, ...workoutIds];
 
+    // Override workout goals with the slider value
+    const WORKOUT_GOAL_MAP: Record<string, Record<string, number>> = {
+      'running': { run: workoutGoal },
+      'swimming': { swim: workoutGoal },
+      'cycling': { ride: workoutGoal },
+      'climbing': { climb: workoutGoal },
+      'surfing': { surf: workoutGoal },
+      'snowboarding': { snowboard: workoutGoal },
+    };
+    const getGoals = (raceId: RaceId) => WORKOUT_GOAL_MAP[raceId] || WEEKLY_GOALS[raceId];
+
     // Normalize keys: ride → bike (both display as "Cycle")
     const NORM: Record<string, string> = { ride: 'bike' };
     const norm = (d: string) => NORM[d] || d;
@@ -707,7 +722,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const recoveryColor = recoveryScore >= 80 ? '#34C759' : recoveryScore >= 60 ? '#F59E0B' : recoveryScore >= 40 ? '#F97316' : '#EF4444';
 
     const raceProgress = allIds.map((raceId) => {
-      const goals = WEEKLY_GOALS[raceId];
+      const goals = getGoals(raceId);
       if (!goals) return null;
       const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${currentWeekKey}`, {});
       const totalGoal = Object.values(goals).reduce((a, b) => a + b, 0);
@@ -719,7 +734,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
 
     // ── Distance table: per-race current-week distances ──
     const distanceTable = allIds.map((raceId) => {
-      const goals = WEEKLY_GOALS[raceId];
+      const goals = getGoals(raceId);
       if (!goals) return null;
       const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${currentWeekKey}`, {});
       const race = RACES.find(r => r.id === raceId)!;
@@ -749,7 +764,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       raceProgress,
       distanceTable,
     };
-  }, [weekKeys, currentWeekKey]);
+  }, [weekKeys, currentWeekKey, workoutGoal]);
 
   const tooltipStyle = {
     backgroundColor: 'rgba(19, 19, 19, 0.95)',
@@ -996,6 +1011,11 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderWorkoutVolumeBar = () => renderBarChart('Workout Volume Breakdown', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume breakdown');
   const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
 
+  const handleWorkoutGoalChange = (val: number) => {
+    setWorkoutGoal(val);
+    saveToStorage('workout-weekly-goal', val);
+  };
+
   const renderDistanceTable = () => {
     const WORKOUT_IDS = new Set(['running', 'swimming', 'cycling', 'climbing', 'surfing', 'snowboarding']);
     const workoutRows = aggregatedData.distanceTable
@@ -1005,12 +1025,31 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     // Flatten to one column per workout (use first discipline's distance)
     const columns = workoutRows.map(r => {
       const d = r.disciplines[0];
-      return { name: r.name, done: d?.done ?? 0, unit: d?.unit ?? '' };
+      return { name: r.name, done: d?.done ?? 0, goal: d?.goal ?? 0, unit: d?.unit ?? '' };
     });
 
     return (
-      <div className="glass p-5 space-y-3">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
+      <div className="glass p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
+          <span className="text-[10px] text-gray-500">Goal: <span className="text-white font-semibold">{workoutGoal} mi</span></span>
+        </div>
+
+        {/* Goal slider */}
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] text-gray-600 flex-shrink-0">0</span>
+          <input
+            type="range"
+            min={0}
+            max={200}
+            step={5}
+            value={workoutGoal}
+            onChange={(e) => handleWorkoutGoalChange(Number(e.target.value))}
+            className="flex-1 h-1.5 appearance-none bg-white/[0.06] rounded-full cursor-pointer accent-[#CCF472]"
+          />
+          <span className="text-[10px] text-gray-600 flex-shrink-0">200</span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1024,13 +1063,27 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             </thead>
             <tbody>
               <tr>
-                {columns.map(c => (
-                  <td key={c.name} className="text-center py-3 px-4">
-                    <span className={`text-sm font-semibold ${c.done > 0 ? 'text-white' : 'text-gray-600'}`}>
-                      {c.done} {c.unit}
-                    </span>
-                  </td>
-                ))}
+                {columns.map(c => {
+                  const pct = c.goal > 0 ? Math.min(100, Math.round((c.done / c.goal) * 100)) : 0;
+                  return (
+                    <td key={c.name} className="text-center py-3 px-4">
+                      <span className={`text-sm font-semibold ${c.done > 0 ? 'text-white' : 'text-gray-600'}`}>
+                        {c.done} {c.unit}
+                      </span>
+                      {c.goal > 0 && (
+                        <div className="mt-1.5 mx-auto w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: pct >= 100 ? '#34C759' : pct >= 50 ? '#CCF472' : 'rgba(255,255,255,0.15)',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             </tbody>
           </table>
