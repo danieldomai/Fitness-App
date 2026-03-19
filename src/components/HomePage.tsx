@@ -1138,7 +1138,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderRaceProgress = () => (
     <div className="glass p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Progress by Race</h3>
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Progress Towards Goal</h3>
         <button onClick={() => setEditingRaces(!editingRaces)} className="text-xs text-gray-500 hover:text-white transition-colors">
           {editingRaces ? 'Done' : 'Edit'}
         </button>
