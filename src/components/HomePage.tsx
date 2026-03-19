@@ -9,6 +9,7 @@ import type { RaceId } from '../types';
 import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime } from '../utils';
 import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
+import TimeInput, { timeInputToSeconds } from './TimeInput';
 
 interface Props {
   onSelect: (id: RaceId) => void;
@@ -357,7 +358,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     for (const disc of disciplines) {
       const val = parseFloat(quickInputValues[disc] || '');
       if (val > 0) distances[disc] = val;
-      const secs = parseTimeInput(quickInputTimes[disc] || '');
+      const secs = timeInputToSeconds(quickInputTimes[disc] || '');
       if (secs > 0) times[disc] = secs;
     }
     const hr = parseInt(quickInputHr) > 0 ? parseInt(quickInputHr) : undefined;
@@ -1201,12 +1202,10 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                   className="w-20 glass-input px-2 py-2 text-sm"
                   placeholder="0"
                 />
-                <input
-                  type="text"
+                <TimeInput
+                  compact
                   value={quickInputTimes[disc] || ''}
-                  onChange={(e) => setQuickInputTimes({ ...quickInputTimes, [disc]: e.target.value })}
-                  className="w-24 glass-input px-2 py-2 text-sm"
-                  placeholder="H:MM:SS"
+                  onChange={(formatted) => setQuickInputTimes({ ...quickInputTimes, [disc]: formatted })}
                 />
               </div>
             </div>

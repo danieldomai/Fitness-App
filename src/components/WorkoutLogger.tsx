@@ -3,6 +3,7 @@ import type { RaceId } from '../types';
 import { WEEKLY_GOALS, SHARED_DISCIPLINES, RACES } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
 import { insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
+import TimeInput, { timeInputToSeconds } from './TimeInput';
 
 export interface WorkoutHistoryEntry {
   id: string;
@@ -99,7 +100,7 @@ export default function WorkoutLogger({ raceId }: Props) {
         updated[d] = (updated[d] || 0) + val;
         loggedDistances[d] = val;
       }
-      const secs = parseTimeInput(timeInputs[d]);
+      const secs = timeInputToSeconds(timeInputs[d]);
       if (secs > 0) {
         updatedTime[d] = (updatedTime[d] || 0) + secs;
         loggedTimes[d] = secs;
@@ -251,16 +252,10 @@ export default function WorkoutLogger({ raceId }: Props) {
                     />
                     <span className="text-xs text-gray-600">{info.unit}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="H:MM:SS"
-                      value={timeInputs[d]}
-                      onChange={(e) => setTimeInputs({ ...timeInputs, [d]: e.target.value })}
-                      className="w-24 glass-input px-2 py-1.5 text-sm"
-                    />
-                    <span className="text-xs text-gray-600">time</span>
-                  </div>
+                  <TimeInput
+                    value={timeInputs[d]}
+                    onChange={(formatted) => setTimeInputs({ ...timeInputs, [d]: formatted })}
+                  />
                 </div>
               </div>
             );
