@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -7,7 +7,7 @@ import {
 import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
 import type { RaceId } from '../types';
 import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime } from '../utils';
-import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, type WorkoutLogRow } from '../lib/db';
+import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
 
 interface Props {
@@ -33,6 +33,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'profile', label: 'Athlete Profile', visible: true },
   { id: 'recovery', label: 'Recovery Status', visible: true },
   { id: 'quick-stats', label: 'Quick Stats', visible: true },
+  { id: 'quick-input', label: 'Quick Log', visible: true },
   { id: 'race-volume', label: 'Race Volume Trend (Line)', visible: true },
   { id: 'race-bar', label: 'Race Volume Breakdown (Bar)', visible: true },
   { id: 'race-distribution', label: 'Race Distribution (Pie)', visible: true },
@@ -41,6 +42,14 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'workout-distribution', label: 'Workout Distribution (Pie)', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
+
+const DISC_UNITS: Record<string, string> = {
+  run: 'mi', swim: 'km', bike: 'mi', ride: 'mi',
+  skierg: 'sessions', 'sled-push': 'sessions', 'sled-pull': 'sessions',
+  'burpee-broad-jump': 'sessions', rowing: 'sessions',
+  'farmers-carry': 'sessions', 'sandbag-lunges': 'sessions', 'wall-balls': 'sessions',
+  climb: 'sessions', surf: 'sessions', snowboard: 'sessions',
+};
 
 const DISCIPLINE_LABELS: Record<string, string> = {
   run: 'Run', swim: 'Swim', bike: 'Cycle', ride: 'Cycle',
@@ -101,9 +110,17 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     loadFromStorage('user-profile', { name: '', age: '', weight: '', height: '', gender: '' })
   );
   const [editingProfile, setEditingProfile] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [dropdownSub, setDropdownSub] = useState<'races' | 'workouts' | null>(null);
   const [editingRaces, setEditingRaces] = useState(false);
+  const [navFavorites, setNavFavorites] = useState<RaceId[]>(() =>
+    loadFromStorage<RaceId[]>('nav-favorites', [])
+  );
+  // Quick-input state
+  const [quickInputRace, setQuickInputRace] = useState<RaceId | ''>('');
+  const [quickInputValues, setQuickInputValues] = useState<Record<string, string>>({});
+  const [quickInputTimes, setQuickInputTimes] = useState<Record<string, string>>({});
+  const [quickInputHr, setQuickInputHr] = useState('');
+  const [quickInputSaving, setQuickInputSaving] = useState(false);
+  const [quickInputSuccess, setQuickInputSuccess] = useState(false);
   const [editingLayout, setEditingLayout] = useState(false);
   const [layout, setLayout] = useState<DashboardSection[]>(() => {
     const saved = loadFromStorage<DashboardSection[] | null>('dashboard-layout', null);
@@ -130,7 +147,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [editDistances, setEditDistances] = useState<Record<string, string>>({});
   const [editTimes, setEditTimes] = useState<Record<string, string>>({});
   const [editHr, setEditHr] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Quote that rotates every 10 minutes
   const getQuoteIndex = () => Math.floor(Date.now() / (10 * 60 * 1000)) % QUOTES.length;
@@ -143,16 +159,13 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-        setDropdownSub(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  const toggleNavFavorite = (raceId: RaceId) => {
+    setNavFavorites(prev => {
+      const next = prev.includes(raceId) ? prev.filter(r => r !== raceId) : [...prev, raceId];
+      saveToStorage('nav-favorites', next);
+      return next;
+    });
+  };
 
   const updateProfile = (field: keyof UserProfile, value: string) => {
     const updated = { ...profile, [field]: value };
@@ -322,6 +335,129 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     }
     const mins = parseFloat(raw);
     return isNaN(mins) ? 0 : Math.round(mins * 60);
+  };
+
+  const handleQuickLog = async () => {
+    if (!quickInputRace) return;
+    const race = quickInputRace as RaceId;
+    const goals = WEEKLY_GOALS[race];
+    if (!goals) return;
+
+    const disciplines = Object.keys(goals);
+    const distances: Record<string, number> = {};
+    const times: Record<string, number> = {};
+    for (const disc of disciplines) {
+      const val = parseFloat(quickInputValues[disc] || '');
+      if (val > 0) distances[disc] = val;
+      const secs = parseTimeInput(quickInputTimes[disc] || '');
+      if (secs > 0) times[disc] = secs;
+    }
+    const hr = parseInt(quickInputHr) > 0 ? parseInt(quickInputHr) : undefined;
+
+    if (Object.keys(distances).length === 0 && Object.keys(times).length === 0 && !hr) return;
+
+    setQuickInputSaving(true);
+    const now = new Date().toISOString();
+    const weekKey = getWeekKey();
+    const rows: WorkoutLogRow[] = [];
+
+    for (const [disc, val] of Object.entries(distances)) {
+      rows.push({ race, discipline: disc, distance: val, unit: DISC_UNITS[disc] || 'sessions', logged_at: now, week_start: weekKey });
+    }
+    for (const [disc, secs] of Object.entries(times)) {
+      rows.push({ race, discipline: `${disc}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
+    }
+    if (hr) {
+      rows.push({ race, discipline: 'hr', distance: hr, unit: 'bpm', logged_at: now, week_start: weekKey });
+    }
+
+    // Synced rows
+    for (const [disc, val] of Object.entries(distances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === race && link.discipline === disc) continue;
+        rows.push({ race: link.raceId, discipline: link.discipline, distance: val, unit: DISC_UNITS[link.discipline] || 'sessions', logged_at: now, week_start: weekKey });
+      }
+    }
+    for (const [disc, secs] of Object.entries(times)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === race && link.discipline === disc) continue;
+        rows.push({ race: link.raceId, discipline: `${link.discipline}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
+      }
+    }
+
+    await insertWorkoutLogs(rows);
+
+    // Update caches for immediate UI update
+    const distKey = `workouts-${race}-${weekKey}`;
+    const distData = loadFromStorage<Record<string, number>>(distKey, {});
+    for (const [disc, val] of Object.entries(distances)) {
+      distData[disc] = (distData[disc] || 0) + val;
+    }
+    saveToStorage(distKey, distData);
+
+    const timeKey = `workout-times-${race}-${weekKey}`;
+    const timeData = loadFromStorage<Record<string, number>>(timeKey, {});
+    for (const [disc, secs] of Object.entries(times)) {
+      timeData[disc] = (timeData[disc] || 0) + secs;
+    }
+    saveToStorage(timeKey, timeData);
+
+    if (hr) {
+      const hrKey = `hr-${race}-${weekKey}`;
+      const hrs = loadFromStorage<number[]>(hrKey, []);
+      hrs.push(hr);
+      saveToStorage(hrKey, hrs);
+    }
+
+    // Sync caches for linked races
+    for (const [disc, val] of Object.entries(distances)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === race && link.discipline === disc) continue;
+        const lk = `workouts-${link.raceId}-${weekKey}`;
+        const ld = loadFromStorage<Record<string, number>>(lk, {});
+        ld[link.discipline] = (ld[link.discipline] || 0) + val;
+        saveToStorage(lk, ld);
+      }
+    }
+    for (const [disc, secs] of Object.entries(times)) {
+      const links = SHARED_DISCIPLINES[disc];
+      if (!links) continue;
+      for (const link of links) {
+        if (link.raceId === race && link.discipline === disc) continue;
+        const lk = `workout-times-${link.raceId}-${weekKey}`;
+        const ld = loadFromStorage<Record<string, number>>(lk, {});
+        ld[link.discipline] = (ld[link.discipline] || 0) + secs;
+        saveToStorage(lk, ld);
+      }
+    }
+
+    // Add to history
+    const histEntry: WorkoutHistoryEntry = {
+      id: `${Date.now()}-${race}`,
+      timestamp: now,
+      raceId: race,
+      distances,
+      times,
+      hr,
+    };
+    const allHist = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+    allHist.unshift(histEntry);
+    saveToStorage('workout-history', allHist);
+    setHistoryEntries(allHist);
+
+    // Reset form
+    setQuickInputValues({});
+    setQuickInputTimes({});
+    setQuickInputHr('');
+    setQuickInputSaving(false);
+    setQuickInputSuccess(true);
+    setTimeout(() => setQuickInputSuccess(false), 2000);
   };
 
   const saveEditEntry = (entry: WorkoutHistoryEntry) => {
@@ -728,7 +864,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     <div className="glass p-5 space-y-3">
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
       {disciplines.length > 0 ? (
-        <div style={{ height: 220 }}>
+        <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={lineData}>
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
@@ -750,7 +886,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="flex items-center justify-center" style={{ height: 220 }}>
+        <div className="flex items-center justify-center" style={{ height: 180 }}>
           <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
@@ -761,7 +897,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     <div className="glass p-5 space-y-3">
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
       {disciplines.length > 0 ? (
-        <div style={{ height: 220 }}>
+        <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={lineData}>
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 11 }} />
@@ -783,7 +919,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="flex items-center justify-center" style={{ height: 220 }}>
+        <div className="flex items-center justify-center" style={{ height: 180 }}>
           <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
@@ -795,15 +931,15 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{title}</h3>
       {pieData.length > 0 ? (
         <div className="flex flex-col lg:flex-row items-center gap-6">
-          <div style={{ width: 200, height: 200 }} className="flex-shrink-0">
+          <div style={{ width: 160, height: 160 }} className="flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
+                  innerRadius={42}
+                  outerRadius={68}
                   paddingAngle={2}
                   dataKey="value"
                   strokeWidth={0}
@@ -830,7 +966,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-center" style={{ height: 200 }}>
+        <div className="flex items-center justify-center" style={{ height: 160 }}>
           <div className="text-xs text-gray-600">{emptyMsg}</div>
         </div>
       )}
@@ -843,6 +979,102 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderWorkoutVolumeLine = () => renderLineChart('Workout Volume Trend', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume trends');
   const renderWorkoutVolumeBar = () => renderBarChart('Workout Volume Breakdown', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume breakdown');
   const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
+
+  const renderQuickInput = () => {
+    const selectedRace = quickInputRace ? RACES.find(r => r.id === quickInputRace) : null;
+    const disciplines = quickInputRace ? Object.keys(WEEKLY_GOALS[quickInputRace as RaceId] || {}) : [];
+
+    return (
+      <div className="glass p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Quick Log</h3>
+          {quickInputSuccess && (
+            <span className="text-[10px] font-semibold text-[#CCF472] uppercase tracking-wider animate-pulse">Saved!</span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Race selector */}
+          <div className="flex-shrink-0">
+            <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">Activity</label>
+            <select
+              value={quickInputRace}
+              onChange={(e) => { setQuickInputRace(e.target.value as RaceId | ''); setQuickInputValues({}); setQuickInputTimes({}); setQuickInputHr(''); }}
+              className="glass-input px-3 py-2 text-sm bg-transparent min-w-[160px]"
+            >
+              <option value="" className="bg-[#0E0E0E]">Select...</option>
+              {RACES.filter(r => r.category === 'race').length > 0 && (
+                <optgroup label="Races">
+                  {RACES.filter(r => r.category === 'race').map(r => (
+                    <option key={r.id} value={r.id} className="bg-[#0E0E0E]">{r.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Workouts">
+                {RACES.filter(r => r.category === 'workout').map(r => (
+                  <option key={r.id} value={r.id} className="bg-[#0E0E0E]">{r.name}</option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Discipline inputs */}
+          {selectedRace && disciplines.map(disc => (
+            <div key={disc} className="flex-shrink-0">
+              <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">
+                {DISCIPLINE_LABELS[disc] || disc} ({DISC_UNITS[disc] || 'sessions'})
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={quickInputValues[disc] || ''}
+                  onChange={(e) => setQuickInputValues({ ...quickInputValues, [disc]: e.target.value })}
+                  className="w-20 glass-input px-2 py-2 text-sm"
+                  placeholder="0"
+                />
+                <input
+                  type="text"
+                  value={quickInputTimes[disc] || ''}
+                  onChange={(e) => setQuickInputTimes({ ...quickInputTimes, [disc]: e.target.value })}
+                  className="w-24 glass-input px-2 py-2 text-sm"
+                  placeholder="H:MM:SS"
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* HR input */}
+          {selectedRace && (
+            <div className="flex-shrink-0">
+              <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">HR</label>
+              <input
+                type="number"
+                min="30"
+                max="250"
+                value={quickInputHr}
+                onChange={(e) => setQuickInputHr(e.target.value)}
+                className="w-20 glass-input px-2 py-2 text-sm"
+                placeholder="bpm"
+              />
+            </div>
+          )}
+
+          {/* Submit */}
+          {selectedRace && (
+            <button
+              onClick={handleQuickLog}
+              disabled={quickInputSaving}
+              className="glow-btn px-5 py-2 text-sm font-medium flex-shrink-0 self-end"
+            >
+              {quickInputSaving ? 'Saving...' : 'Log'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderRaceProgress = () => (
     <div className="glass p-5 space-y-4">
@@ -898,6 +1130,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     'profile': renderProfile,
     'recovery': renderRecovery,
     'quick-stats': renderQuickStats,
+    'quick-input': renderQuickInput,
     'race-volume': renderRaceVolumeLine,
     'race-bar': renderRaceVolumeBar,
     'race-distribution': renderRaceDistribution,
@@ -908,11 +1141,13 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   };
 
   // Group sections: profile+recovery+quick-stats go into the top 3-col grid,
-  // everything else is full-width
+  // chart pairs go side-by-side, everything else is full-width
   const TOP_ROW_IDS = new Set(['profile', 'recovery', 'quick-stats']);
+  const CHART_IDS = new Set(['race-volume', 'race-bar', 'race-distribution', 'workout-volume', 'workout-bar', 'workout-distribution']);
 
   const visibleTopRow = layout.filter(s => TOP_ROW_IDS.has(s.id) && s.visible);
-  const visibleFullWidth = layout.filter(s => !TOP_ROW_IDS.has(s.id) && s.visible);
+  const visibleCharts = layout.filter(s => CHART_IDS.has(s.id) && s.visible);
+  const visibleFullWidth = layout.filter(s => !TOP_ROW_IDS.has(s.id) && !CHART_IDS.has(s.id) && s.visible);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -967,90 +1202,6 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             </svg>
             <span>Breakdown</span>
           </button>
-
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => { setDropdownOpen(!dropdownOpen); setDropdownSub(null); }}
-              className="glow-btn px-5 py-2.5 text-sm font-medium flex items-center gap-2"
-            >
-              <span>Training</span>
-              <svg
-                className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 glass-elevated rounded overflow-hidden shadow-2xl z-50">
-                {dropdownSub === null ? (
-                  <>
-                    <button
-                      onClick={() => setDropdownSub('races')}
-                      className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-white/[0.06] transition-colors border-b border-white/[0.04]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <svg className="w-4.5 h-4.5 text-[#CCF472]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
-                        </svg>
-                        <div>
-                          <div className="text-sm font-medium text-white">Races</div>
-                          <div className="text-[10px] text-gray-600">Ironman, Marathon, Hyrox</div>
-                        </div>
-                      </div>
-                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setDropdownSub('workouts')}
-                      className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-white/[0.06] transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <svg className="w-4.5 h-4.5 text-[#CCF472]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <div>
-                          <div className="text-sm font-medium text-white">Workouts</div>
-                          <div className="text-[10px] text-gray-600">Running, Swimming, Cycling & more</div>
-                        </div>
-                      </div>
-                      <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setDropdownSub(null)}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-white/[0.06] transition-colors border-b border-white/[0.06]"
-                    >
-                      <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                      </svg>
-                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                        {dropdownSub === 'races' ? 'Races' : 'Workouts'}
-                      </span>
-                    </button>
-                    {RACES.filter((r) => r.category === dropdownSub.slice(0, -1) as 'race' | 'workout').map((race) => (
-                      <button
-                        key={race.id}
-                        onClick={() => { onSelect(race.id); setDropdownOpen(false); setDropdownSub(null); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.06] transition-colors border-b border-white/[0.04] last:border-0"
-                      >
-                        <span className="text-xs font-bold text-gray-500 w-8">{race.icon}</span>
-                        <div>
-                          <div className="text-sm font-medium text-white">{race.name}</div>
-                          <div className="text-[10px] text-gray-600">{race.description}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -1065,11 +1216,41 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
 
       {/* Layout Editor Panel */}
       {editingLayout && (
-        <div className="glass p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Dashboard Layout</h3>
-            <span className="text-[10px] text-gray-600">Drag to reorder / toggle visibility</span>
+        <div className="glass p-5 space-y-5">
+          {/* Nav Favorites */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Quick-Switch Menu</h3>
+              <span className="text-[10px] text-gray-600">Select races/workouts for the top nav bar</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {RACES.map((race) => {
+                const isFav = navFavorites.includes(race.id);
+                return (
+                  <button key={race.id} onClick={() => toggleNavFavorite(race.id)}
+                    className={`rounded p-2.5 text-center space-y-1 transition-all border ${isFav ? 'bg-[#CCF472]/10 border-[#CCF472]/30' : 'bg-white/[0.02] border-white/[0.05] opacity-50'}`}>
+                    <div className="text-xs font-bold text-gray-400">{race.icon}</div>
+                    <div className="text-[10px] font-medium text-gray-400 leading-tight">{race.name}</div>
+                    <div className={`text-[9px] font-semibold uppercase tracking-wider ${isFav ? 'text-[#CCF472]' : 'text-gray-600'}`}>
+                      {isFav ? 'Pinned' : 'Hidden'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {navFavorites.length === 0 && (
+              <p className="text-[10px] text-gray-600 italic">No favorites selected — all races/workouts will show in the nav bar.</p>
+            )}
           </div>
+
+          <div className="h-px bg-white/[0.06]" />
+
+          {/* Section Layout */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Dashboard Sections</h3>
+              <span className="text-[10px] text-gray-600">Drag to reorder / toggle visibility</span>
+            </div>
           <div className="space-y-1.5">
             {layout.map((section, index) => (
               <div
@@ -1135,6 +1316,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 </button>
               </div>
             ))}
+          </div>
           </div>
         </div>
       )}
@@ -1331,7 +1513,16 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
         </div>
       )}
 
-      {/* Full-width sections in layout order */}
+      {/* Charts — side by side in 2-column grid */}
+      {visibleCharts.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {visibleCharts.map(section => (
+            <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Other full-width sections in layout order */}
       {visibleFullWidth.map(section => (
         <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
       ))}

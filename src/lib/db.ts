@@ -47,6 +47,7 @@ const GOAL_KEY_RE = /^goal-(.+)$/;
 const SETTING_KEYS = new Set([
   'user-profile', 'dashboard-layout', 'active-races', 'active-race',
   'hyrox-gender', 'hyrox-division', 'hyrox-station-goal-inputs',
+  'nav-favorites',
 ]);
 
 function persistToSupabase(key: string, value: unknown): void {
