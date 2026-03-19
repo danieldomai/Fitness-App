@@ -16,8 +16,8 @@ export default function GenericWorkoutDashboard({ raceId }: Props) {
         <h2 className="text-lg font-bold text-white">{race?.name || raceId}</h2>
         <p className="text-sm text-gray-500 mt-1">{race?.description}</p>
       </div>
-      <WorkoutLogger raceId={raceId} />
       <ActivityCharts raceId={raceId} />
+      <WorkoutLogger raceId={raceId} />
     </div>
   );
 }

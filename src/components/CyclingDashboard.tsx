@@ -95,9 +95,9 @@ export default function CyclingDashboard() {
         </table>
       </div>
 
-      <WorkoutLogger raceId="cycling" />
-
       <ActivityCharts raceId="cycling" />
+
+      <WorkoutLogger raceId="cycling" />
 
       <NutritionInsights estimatedSeconds={rideSplit} raceType="cycling" distanceMiles={distance} />
     </div>
