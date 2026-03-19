@@ -34,6 +34,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'recovery', label: 'Recovery Status', visible: true },
   { id: 'quick-stats', label: 'Quick Stats', visible: true },
   { id: 'quick-input', label: 'Quick Log', visible: true },
+  { id: 'distance-table', label: 'Weekly Distance Table', visible: true },
   { id: 'race-volume', label: 'Race Volume Trend (Line)', visible: true },
   { id: 'race-bar', label: 'Race Volume Breakdown (Bar)', visible: true },
   { id: 'race-distribution', label: 'Race Distribution (Pie)', visible: true },
@@ -716,6 +717,20 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       return { raceId, name: race.name, icon: race.icon, pct };
     }).filter(Boolean) as { raceId: string; name: string; icon: string; pct: number }[];
 
+    // ── Distance table: per-race current-week distances ──
+    const distanceTable = allIds.map((raceId) => {
+      const goals = WEEKLY_GOALS[raceId];
+      if (!goals) return null;
+      const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${currentWeekKey}`, {});
+      const race = RACES.find(r => r.id === raceId)!;
+      const disciplines = Object.entries(goals).map(([disc, goal]) => {
+        const done = distances[disc] || 0;
+        const unit = ['swim'].includes(disc) ? 'km' : ['run', 'bike', 'ride'].includes(disc) ? 'mi' : 'sessions';
+        return { disc, label: DISCIPLINE_LABELS[disc] || disc, done: Math.round(done * 10) / 10, goal, unit };
+      });
+      return { raceId, name: race.name, icon: race.icon, disciplines };
+    }).filter(Boolean) as { raceId: string; name: string; icon: string; disciplines: { disc: string; label: string; done: number; goal: number; unit: string }[] }[];
+
     return {
       raceLineData: raceChart.lineData,
       raceActiveDisciplines: raceChart.activeDisciplines,
@@ -732,6 +747,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       recoveryColor,
       daysSinceLastWorkout,
       raceProgress,
+      distanceTable,
     };
   }, [weekKeys, currentWeekKey]);
 
@@ -980,6 +996,84 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderWorkoutVolumeBar = () => renderBarChart('Workout Volume Breakdown', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume breakdown');
   const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
 
+  const renderDistanceTable = () => {
+    const rows = aggregatedData.distanceTable.filter(r => activeRaces.includes(r.raceId as RaceId));
+    if (rows.length === 0) {
+      return (
+        <div className="glass p-5 space-y-3">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Weekly Distances</h3>
+          <div className="flex items-center justify-center" style={{ height: 80 }}>
+            <div className="text-xs text-gray-600">No active races to show</div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="glass p-5 space-y-3">
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06]">
+                <th className="text-left text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Activity</th>
+                <th className="text-left text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Discipline</th>
+                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Done</th>
+                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 pr-4">Goal</th>
+                <th className="text-right text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2">Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((race) =>
+                race.disciplines.map((d, i) => {
+                  const pct = d.goal > 0 ? Math.min(100, Math.round((d.done / d.goal) * 100)) : 0;
+                  return (
+                    <tr key={`${race.raceId}-${d.disc}`} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                      {i === 0 ? (
+                        <td rowSpan={race.disciplines.length} className="py-2.5 pr-4 align-top">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-500">{race.icon}</span>
+                            <span className="text-xs font-medium text-gray-300">{race.name}</span>
+                          </div>
+                        </td>
+                      ) : null}
+                      <td className="py-2.5 pr-4">
+                        <span className="text-xs text-gray-400">{d.label}</span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right">
+                        <span className={`text-xs font-semibold ${d.done > 0 ? 'text-white' : 'text-gray-600'}`}>
+                          {d.done} {d.unit}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right">
+                        <span className="text-xs text-gray-500">{d.goal} {d.unit}</span>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${pct}%`,
+                                backgroundColor: pct >= 100 ? '#34C759' : pct >= 50 ? '#CCF472' : 'rgba(255,255,255,0.15)',
+                              }}
+                            />
+                          </div>
+                          <span className={`text-[10px] font-semibold w-8 text-right ${pct >= 100 ? 'text-[#34C759]' : pct >= 50 ? 'text-[#CCF472]' : 'text-gray-500'}`}>
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderQuickInput = () => {
     const selectedRace = quickInputRace ? RACES.find(r => r.id === quickInputRace) : null;
     const disciplines = quickInputRace ? Object.keys(WEEKLY_GOALS[quickInputRace as RaceId] || {}) : [];
@@ -1138,16 +1232,20 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     'workout-bar': renderWorkoutVolumeBar,
     'workout-distribution': renderWorkoutDistribution,
     'race-progress': renderRaceProgress,
+    'distance-table': renderDistanceTable,
   };
 
   // Group sections: profile+recovery+quick-stats go into the top 3-col grid,
-  // chart pairs go side-by-side, everything else is full-width
+  // distance-table + quick-input render full-width ABOVE charts,
+  // chart pairs go side-by-side, everything else is full-width below charts
   const TOP_ROW_IDS = new Set(['profile', 'recovery', 'quick-stats']);
+  const PRE_CHART_IDS = new Set(['distance-table', 'quick-input']);
   const CHART_IDS = new Set(['race-volume', 'race-bar', 'race-distribution', 'workout-volume', 'workout-bar', 'workout-distribution']);
 
   const visibleTopRow = layout.filter(s => TOP_ROW_IDS.has(s.id) && s.visible);
+  const visiblePreChart = layout.filter(s => PRE_CHART_IDS.has(s.id) && s.visible);
   const visibleCharts = layout.filter(s => CHART_IDS.has(s.id) && s.visible);
-  const visibleFullWidth = layout.filter(s => !TOP_ROW_IDS.has(s.id) && !CHART_IDS.has(s.id) && s.visible);
+  const visibleFullWidth = layout.filter(s => !TOP_ROW_IDS.has(s.id) && !PRE_CHART_IDS.has(s.id) && !CHART_IDS.has(s.id) && s.visible);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -1512,6 +1610,11 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           ))}
         </div>
       )}
+
+      {/* Pre-chart full-width sections (distance table, quick input) */}
+      {visiblePreChart.map(section => (
+        <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
+      ))}
 
       {/* Charts — side by side in 2-column grid */}
       {visibleCharts.length > 0 && (
