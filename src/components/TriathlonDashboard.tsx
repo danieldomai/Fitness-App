@@ -55,19 +55,19 @@ export default function TriathlonDashboard({ raceId }: Props) {
 
       <div className="glass p-4 text-center">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Total Finish Time</div>
-        <div className="text-2xl font-bold text-[#1E6F6B] mt-1">{formatTime(totalEstimate)}</div>
+        <div className="text-2xl font-bold text-[#CCF472] mt-1">{formatTime(totalEstimate)}</div>
         <div className="text-xs text-gray-500 mt-1">
           Swim {formatTime(swimSplit)} + Cycle {formatTime(bikeSplit)} + Run {formatTime(runSplit)} + T1/T2 ~{formatTime(transitionEstimate)}
         </div>
       </div>
 
-      <div className="flex rounded-lg overflow-hidden border border-white/[0.08]">
+      <div className="flex rounded overflow-hidden border border-white/[0.08]">
         {(['swim', 'bike', 'run'] as Discipline[]).map((d) => (
           <button
             key={d}
             onClick={() => setTab(d)}
             className={`flex-1 px-4 py-2 text-sm font-medium capitalize transition-all ${
-              tab === d ? 'bg-[#1E6F6B] text-white' : 'bg-white/[0.02] text-gray-500 hover:text-white hover:bg-white/[0.04]'
+              tab === d ? 'bg-[#CCF472] text-[#0E0E0E] font-bold' : 'bg-white/[0.02] text-gray-500 hover:text-white hover:bg-white/[0.04]'
             }`}
           >
             {d === 'bike' ? 'Cycle' : d}
@@ -90,7 +90,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Pace</div>
-              <div className="text-xl font-bold text-[#1E6F6B]">{formatSwimPace(swimPace)}</div>
+              <div className="text-xl font-bold text-[#CCF472]">{formatSwimPace(swimPace)}</div>
             </div>
             <div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Swim Split</div>
@@ -117,7 +117,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Average Speed</div>
-              <div className="text-xl font-bold text-[#1E6F6B]">{bikeSpeed} mph</div>
+              <div className="text-xl font-bold text-[#CCF472]">{bikeSpeed} mph</div>
             </div>
             <div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Cycle Split</div>
@@ -143,7 +143,7 @@ export default function TriathlonDashboard({ raceId }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Pace</div>
-              <div className="text-xl font-bold text-[#1E6F6B]">
+              <div className="text-xl font-bold text-[#CCF472]">
                 {Math.floor(runPace / 60)}:{String(runPace % 60).padStart(2, '0')}/mi
               </div>
             </div>

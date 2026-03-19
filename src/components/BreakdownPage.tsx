@@ -30,9 +30,9 @@ const CHART_COLORS: Record<string, string> = {
 const ALL_RACE_IDS: RaceId[] = ['half-marathon', 'marathon', 'hyrox', 'ironman-70.3', 'ironman-140.6', 'cycling'];
 
 const tooltipStyle = {
-  backgroundColor: 'rgba(15, 17, 23, 0.95)',
+  backgroundColor: 'rgba(19, 19, 19, 0.95)',
   border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: '8px',
+  borderRadius: '4px',
   color: '#E5E7EB',
   fontSize: '12px',
   padding: '8px 12px',
@@ -223,7 +223,7 @@ export default function BreakdownPage({ onBack }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="glass p-2.5 rounded-lg hover:bg-white/[0.06] transition-colors" aria-label="Back to dashboard">
+          <button onClick={onBack} className="glass p-2.5 rounded hover:bg-white/[0.06] transition-colors" aria-label="Back to dashboard">
             <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -234,11 +234,11 @@ export default function BreakdownPage({ onBack }: Props) {
           </div>
         </div>
 
-        <div className="flex glass rounded-lg overflow-hidden">
+        <div className="flex glass rounded overflow-hidden">
           {timeRanges.map(({ key, label }) => (
             <button key={key} onClick={() => setTimeRange(key)}
               className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all ${
-                timeRange === key ? 'bg-[#1E6F6B] text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'
+                timeRange === key ? 'bg-[#CCF472] text-[#0E0E0E] font-bold' : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'
               }`}>
               {label}
             </button>
@@ -346,7 +346,7 @@ export default function BreakdownPage({ onBack }: Props) {
               </div>
               <div className="space-y-2">
                 {pieData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-3 bg-white/[0.02] rounded-lg px-4 py-2.5 border border-white/[0.05]">
+                  <div key={entry.name} className="flex items-center gap-3 bg-white/[0.02] rounded px-4 py-2.5 border border-white/[0.05]">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
                     <div className="flex-1 text-sm font-medium text-gray-400">{entry.name}</div>
                     <div className="text-sm font-bold text-white">{entry.pct}%</div>

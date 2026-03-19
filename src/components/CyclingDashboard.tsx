@@ -64,7 +64,7 @@ export default function CyclingDashboard() {
         <div className="grid grid-cols-2 gap-4 pt-2">
           <div>
             <div className="text-[10px] text-gray-500 uppercase tracking-wider">Average Speed</div>
-            <div className="text-xl font-bold text-[#1E6F6B]">{speed} mph</div>
+            <div className="text-xl font-bold text-[#CCF472]">{speed} mph</div>
           </div>
           <div>
             <div className="text-[10px] text-gray-500 uppercase tracking-wider">Estimated Ride Time</div>

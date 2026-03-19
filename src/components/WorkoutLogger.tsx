@@ -185,7 +185,7 @@ export default function WorkoutLogger({ raceId }: Props) {
           {disciplines.map((d) => {
             const info = DISCIPLINE_LABELS[d] || { label: d, unit: '' };
             return (
-              <div key={d} className="bg-white/[0.02] rounded-lg px-4 py-3 border border-white/[0.05]">
+              <div key={d} className="bg-white/[0.02] rounded px-4 py-3 border border-white/[0.05]">
                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-0.5">{info.label}</label>
                 {SHARED_DISCIPLINES[d] && (() => {
                   const linked = SHARED_DISCIPLINES[d].filter(l => !(l.raceId === raceId && l.discipline === d));
@@ -222,7 +222,7 @@ export default function WorkoutLogger({ raceId }: Props) {
           })}
         </div>
 
-        <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg px-4 py-3">
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded px-4 py-3">
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Avg Heart Rate</label>
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ export default function WorkoutLogger({ raceId }: Props) {
                 </div>
                 <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[#1E6F6B] transition-all"
+                    className="h-full rounded-full bg-[#CCF472] transition-all"
                     style={{ width: `${pct}%`, opacity: 0.85 }}
                   />
                 </div>
@@ -282,7 +282,7 @@ export default function WorkoutLogger({ raceId }: Props) {
           {history.map(({ weekKey: wk, label, isCurrent, data, timeData, avgHr: wkAvgHr }) => {
             const hasData = disciplines.some((d) => (data[d] || 0) > 0) || wkAvgHr !== null;
             return (
-              <div key={wk} className={`border rounded-lg p-4 ${isCurrent ? 'border-[#1E6F6B]/30 bg-[#1E6F6B]/[0.03]' : 'border-white/[0.05] bg-white/[0.02]'}`}>
+              <div key={wk} className={`border rounded p-4 ${isCurrent ? 'border-[#CCF472]/30 bg-[#CCF472]/[0.03]' : 'border-white/[0.05] bg-white/[0.02]'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-400">{label}</span>
                   <div className="flex items-center gap-2">
@@ -290,7 +290,7 @@ export default function WorkoutLogger({ raceId }: Props) {
                       <span className="text-xs text-gray-500">{wkAvgHr} bpm avg</span>
                     )}
                     {isCurrent && (
-                      <span className="text-[10px] font-semibold text-[#1E6F6B] bg-[#1E6F6B]/10 px-2 py-0.5 rounded uppercase tracking-wider">Current</span>
+                      <span className="text-[10px] font-semibold text-[#CCF472] bg-[#CCF472]/10 px-2 py-0.5 rounded uppercase tracking-wider">Current</span>
                     )}
                   </div>
                 </div>

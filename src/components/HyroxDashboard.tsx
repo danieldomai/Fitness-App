@@ -81,14 +81,14 @@ export default function HyroxDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <div className="flex rounded-lg overflow-hidden border border-white/[0.08]">
+        <div className="flex rounded overflow-hidden border border-white/[0.08]">
           {(['men', 'women'] as Gender[]).map((g) => (
             <button
               key={g}
               onClick={() => handleGender(g)}
               className={`px-4 py-2 text-sm font-medium transition-all ${
                 gender === g
-                  ? 'bg-[#1E6F6B] text-white'
+                  ? 'bg-[#CCF472] text-[#0E0E0E] font-bold'
                   : 'bg-white/[0.02] text-gray-500 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
@@ -96,14 +96,14 @@ export default function HyroxDashboard() {
             </button>
           ))}
         </div>
-        <div className="flex rounded-lg overflow-hidden border border-white/[0.08]">
+        <div className="flex rounded overflow-hidden border border-white/[0.08]">
           {(['open', 'pro'] as Division[]).map((d) => (
             <button
               key={d}
               onClick={() => handleDivision(d)}
               className={`px-4 py-2 text-sm font-medium transition-all ${
                 division === d
-                  ? 'bg-[#1E6F6B] text-white'
+                  ? 'bg-[#CCF472] text-[#0E0E0E] font-bold'
                   : 'bg-white/[0.02] text-gray-500 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
@@ -124,7 +124,7 @@ export default function HyroxDashboard() {
           onChange={(e) => handleGoal(Number(e.target.value))}
           className="w-full"
         />
-        <div className="text-2xl font-bold text-[#1E6F6B]">{formatTime(goalSeconds)}</div>
+        <div className="text-2xl font-bold text-[#CCF472]">{formatTime(goalSeconds)}</div>
       </div>
 
       <div className="glass-table">
@@ -174,7 +174,7 @@ export default function HyroxDashboard() {
         {projectedTotal > 0 && (
           <div className="border-t border-white/[0.06] px-4 py-3 bg-white/[0.02] flex justify-between items-center">
             <span className="text-sm font-medium text-gray-400">Projected Total</span>
-            <span className="text-lg font-bold text-[#1E6F6B]">{formatTime(projectedTotal)}</span>
+            <span className="text-lg font-bold text-[#CCF472]">{formatTime(projectedTotal)}</span>
           </div>
         )}
       </div>

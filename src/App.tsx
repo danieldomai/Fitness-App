@@ -43,7 +43,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F1117] text-gray-200 relative">
+    <div className="min-h-screen bg-[#0E0E0E] text-gray-200 relative">
       {view === 'race' && activeRace && (
         <NavBar activeRace={activeRace} onSelect={handleRaceSelect} onHome={handleHome} />
       )}

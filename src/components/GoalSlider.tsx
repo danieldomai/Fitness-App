@@ -37,7 +37,7 @@ export default function GoalSlider({ value, min, max, wrSeconds, cutoffSeconds, 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div>
           <div className="text-[10px] text-gray-500 uppercase tracking-wider">Goal Time</div>
-          <div className="text-xl font-bold text-[#1E6F6B]">{formatTime(value)}</div>
+          <div className="text-xl font-bold text-[#CCF472]">{formatTime(value)}</div>
         </div>
         <div>
           <div className="text-[10px] text-gray-500 uppercase tracking-wider">Avg Pace</div>
@@ -60,7 +60,7 @@ export default function GoalSlider({ value, min, max, wrSeconds, cutoffSeconds, 
         </div>
         <div className="w-full bg-white/[0.06] rounded-full h-2 relative overflow-hidden">
           <div
-            className="h-full rounded-full bg-[#1E6F6B] transition-all"
+            className="h-full rounded-full bg-[#CCF472] transition-all"
             style={{ width: `${clampedProgress}%` }}
           />
         </div>

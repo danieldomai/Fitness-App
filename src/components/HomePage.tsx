@@ -567,9 +567,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   }, [weekKeys, currentWeekKey]);
 
   const tooltipStyle = {
-    backgroundColor: 'rgba(15, 17, 23, 0.95)',
+    backgroundColor: 'rgba(19, 19, 19, 0.95)',
     border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
+    borderRadius: '4px',
     color: '#E5E7EB',
     fontSize: '12px',
     padding: '8px 12px',
@@ -600,9 +600,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             <div>
               <label className="text-[10px] text-gray-600 uppercase tracking-wider">Gender</label>
               <select value={profile.gender} onChange={(e) => updateProfile('gender', e.target.value)} className="w-full glass-input px-3 py-2 text-sm mt-1 bg-transparent">
-                <option value="" className="bg-[#0F1117]">Select</option>
-                <option value="male" className="bg-[#0F1117]">Male</option>
-                <option value="female" className="bg-[#0F1117]">Female</option>
+                <option value="" className="bg-[#0E0E0E]">Select</option>
+                <option value="male" className="bg-[#0E0E0E]">Male</option>
+                <option value="female" className="bg-[#0E0E0E]">Female</option>
               </select>
             </div>
           </div>
@@ -632,11 +632,11 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white/[0.02] rounded-lg p-2.5 text-center border border-white/[0.05]">
+            <div className="bg-white/[0.02] rounded p-2.5 text-center border border-white/[0.05]">
               <div className="text-lg font-bold text-white">{profile.weight || '-'}</div>
               <div className="text-[10px] text-gray-600 uppercase">lbs</div>
             </div>
-            <div className="bg-white/[0.02] rounded-lg p-2.5 text-center border border-white/[0.05]">
+            <div className="bg-white/[0.02] rounded p-2.5 text-center border border-white/[0.05]">
               <div className="text-lg font-bold text-white">
                 {profile.height ? `${Math.floor(parseInt(profile.height) / 12)}'${parseInt(profile.height) % 12}"` : '-'}
               </div>
@@ -826,10 +826,10 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             const isActive = activeRaces.includes(race.id);
             return (
               <button key={race.id} onClick={() => toggleRace(race.id)}
-                className={`rounded-lg p-3 text-center space-y-2 transition-all border ${isActive ? 'bg-[#1E6F6B]/10 border-[#1E6F6B]/30' : 'bg-white/[0.02] border-white/[0.05] opacity-35'}`}>
+                className={`rounded p-3 text-center space-y-2 transition-all border ${isActive ? 'bg-[#CCF472]/10 border-[#CCF472]/30' : 'bg-white/[0.02] border-white/[0.05] opacity-35'}`}>
                 <div className="text-xs font-bold text-gray-400">{race.icon}</div>
                 <div className="text-[11px] font-medium text-gray-400 leading-tight">{race.name}</div>
-                <div className={`text-[10px] font-semibold uppercase tracking-wider ${isActive ? 'text-[#1E6F6B]' : 'text-gray-600'}`}>
+                <div className={`text-[10px] font-semibold uppercase tracking-wider ${isActive ? 'text-[#CCF472]' : 'text-gray-600'}`}>
                   {isActive ? 'Active' : 'Hidden'}
                 </div>
               </button>
@@ -842,14 +842,14 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
             .filter(({ raceId }) => activeRaces.includes(raceId as RaceId))
             .map(({ raceId, name, icon, pct }) => (
             <button key={raceId} onClick={() => onSelect(raceId as RaceId)}
-              className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.05] text-center space-y-2 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all cursor-pointer">
+              className="bg-white/[0.02] rounded p-3 border border-white/[0.05] text-center space-y-2 hover:bg-white/[0.05] hover:border-white/[0.1] transition-all cursor-pointer">
               <div className="text-xs font-bold text-gray-500">{icon}</div>
               <div className="text-[11px] font-medium text-gray-400 leading-tight">{name}</div>
               <div className="relative mx-auto" style={{ width: 48, height: 48 }}>
                 <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                   <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="2.5" />
                   <circle cx="18" cy="18" r="15" fill="none"
-                    stroke={pct >= 80 ? '#34C759' : pct >= 40 ? '#1E6F6B' : 'rgba(255,255,255,0.1)'}
+                    stroke={pct >= 80 ? '#34C759' : pct >= 40 ? '#CCF472' : 'rgba(255,255,255,0.1)'}
                     strokeWidth="2.5" strokeDasharray={`${pct * 0.942} 94.2`} strokeLinecap="round" />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-400">{pct}%</div>
@@ -898,9 +898,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           {/* Edit Layout Button */}
           <button
             onClick={() => { setEditingLayout(!editingLayout); setShowHistory(false); }}
-            className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded-lg border ${
+            className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded border ${
               editingLayout
-                ? 'bg-[#1E6F6B] text-white border-[#1E6F6B]'
+                ? 'bg-[#CCF472] text-[#0E0E0E] border-[#CCF472] font-bold'
                 : 'glass text-gray-400 hover:text-white hover:bg-white/[0.06]'
             }`}
           >
@@ -913,9 +913,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
           {/* History Button */}
           <button
             onClick={() => { setShowHistory(!showHistory); setEditingLayout(false); }}
-            className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded-lg border ${
+            className={`px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2 rounded border ${
               showHistory
-                ? 'bg-[#1E6F6B] text-white border-[#1E6F6B]'
+                ? 'bg-[#CCF472] text-[#0E0E0E] border-[#CCF472] font-bold'
                 : 'glass text-gray-400 hover:text-white hover:bg-white/[0.06]'
             }`}
           >
@@ -949,7 +949,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
               </svg>
             </button>
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 glass-elevated rounded-lg overflow-hidden shadow-2xl z-50">
+              <div className="absolute right-0 mt-2 w-64 glass-elevated rounded overflow-hidden shadow-2xl z-50">
                 {dropdownSub === null ? (
                   <>
                     <button
@@ -957,7 +957,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                       className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-white/[0.06] transition-colors border-b border-white/[0.04]"
                     >
                       <div className="flex items-center gap-3">
-                        <svg className="w-4.5 h-4.5 text-[#1E6F6B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-4.5 h-4.5 text-[#CCF472]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
                         </svg>
                         <div>
@@ -974,7 +974,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                       className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-white/[0.06] transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <svg className="w-4.5 h-4.5 text-[#1E6F6B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-4.5 h-4.5 text-[#CCF472]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                         <div>
@@ -1023,7 +1023,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
 
       {/* Quote of the Hour */}
       <div className="flex items-start gap-3 px-1">
-        <span className="text-[#1E6F6B] text-lg leading-none mt-0.5">"</span>
+        <span className="text-[#CCF472] text-lg leading-none mt-0.5">"</span>
         <div>
           <p className="text-sm text-gray-400 italic">{QUOTES[quoteIndex].text}</p>
           <p className="text-[10px] text-gray-600 mt-1 uppercase tracking-wider">— {QUOTES[quoteIndex].author}</p>
@@ -1046,9 +1046,9 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={() => handleDrop(index)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
+                className={`flex items-center gap-3 px-4 py-3 rounded border transition-all cursor-grab active:cursor-grabbing ${
                   dragOverIndex === index
-                    ? 'border-[#1E6F6B]/50 bg-[#1E6F6B]/10'
+                    ? 'border-[#CCF472]/50 bg-[#CCF472]/10'
                     : dragIndex === index
                     ? 'border-white/20 bg-white/[0.04] opacity-50'
                     : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'
@@ -1090,7 +1090,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleSection(section.id); }}
                   className={`relative w-10 h-5.5 rounded-full transition-colors flex-shrink-0 ${
-                    section.visible ? 'bg-[#1E6F6B]' : 'bg-white/[0.08]'
+                    section.visible ? 'bg-[#CCF472]' : 'bg-white/[0.08]'
                   }`}
                   style={{ width: 40, height: 22 }}
                 >
@@ -1141,12 +1141,12 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 };
 
                 return (
-                  <div key={entry.id} className="border border-white/[0.06] rounded-lg bg-white/[0.02] hover:bg-white/[0.03] transition-colors">
+                  <div key={entry.id} className="border border-white/[0.06] rounded bg-white/[0.02] hover:bg-white/[0.03] transition-colors">
                     {/* Header row */}
                     <div className="flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-[#1E6F6B]/10 border border-[#1E6F6B]/20 flex items-center justify-center flex-shrink-0">
-                          <span className="text-[10px] font-bold text-[#1E6F6B]">{race?.icon || '?'}</span>
+                        <div className="w-9 h-9 rounded bg-[#CCF472]/10 border border-[#CCF472]/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] font-bold text-[#CCF472]">{race?.icon || '?'}</span>
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-white truncate">{race?.name || entry.raceId}</div>

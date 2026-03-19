@@ -106,7 +106,7 @@ export default function NutritionInsights({ estimatedSeconds, raceType, distance
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {nutrients.map((n) => (
-          <div key={n.label} className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-4 space-y-2">
+          <div key={n.label} className="bg-white/[0.02] border border-white/[0.06] rounded p-4 space-y-2">
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{n.label}</div>
             <div className="flex items-baseline gap-3">
               <span className="text-lg font-bold text-white">{n.perHour}</span>

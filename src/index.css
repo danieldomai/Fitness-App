@@ -1,38 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #1E6F6B;
-  --color-accent: #1E6F6B;
+  --color-primary: #CCF472;
+  --color-accent: #CCF472;
+  --color-surface: #131313;
+  --color-bg: #0E0E0E;
+  --font-heading: 'Lexend', sans-serif;
+  --font-body: 'Inter', sans-serif;
 }
 
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  background-color: #0F1117;
+  background-color: #0E0E0E;
   color: #E5E7EB;
+}
+
+/* ── Headings use Lexend ── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Lexend', sans-serif;
 }
 
 /* ── Card system ── */
 .card {
-  background: rgba(255, 255, 255, 0.03);
+  background: #131313;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  border-radius: 4px;
 }
 
 .card-elevated {
-  background: rgba(255, 255, 255, 0.05);
+  background: #1A1A1A;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 4px;
 }
 
-/* Legacy glass aliases */
-.glass { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; }
-.glass-elevated { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; }
+/* Legacy glass aliases — updated to sharp Obsidian style */
+.glass { background: #131313; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 4px; }
+.glass-elevated { background: #1A1A1A; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; }
 
 .glass-input {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 4px;
   color: #E5E7EB;
 }
 
@@ -42,23 +51,30 @@ body {
 
 .glass-input:focus {
   outline: none;
-  border-color: rgba(252, 76, 2, 0.5);
-  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.1);
+  border-color: rgba(204, 244, 114, 0.5);
+  box-shadow: 0 0 0 2px rgba(204, 244, 114, 0.1);
 }
 
-/* ── Primary button ── */
+/* ── Primary button — Matcha accent ── */
 .glow-btn {
-  background: #1E6F6B;
-  color: white;
+  background: #CCF472;
+  color: #0E0E0E;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 4px;
+  font-weight: 700;
+  font-family: 'Lexend', sans-serif;
+  letter-spacing: 0.01em;
   transition: all 0.15s ease;
 }
 
 .glow-btn:hover {
-  background: #E04400;
-  transform: translateY(-1px);
+  background: #b8e050;
+  transform: scale(1.02);
+  opacity: 0.95;
+}
+
+.glow-btn:active {
+  transform: scale(0.98);
 }
 
 /* ── Range slider ── */
@@ -77,25 +93,25 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #1E6F6B;
+  background: #CCF472;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(14, 14, 14, 0.8);
 }
 
 input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #1E6F6B;
+  background: #CCF472;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(14, 14, 14, 0.8);
 }
 
 /* ── Table ── */
 .glass-table {
-  background: rgba(255, 255, 255, 0.02);
+  background: #131313;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
