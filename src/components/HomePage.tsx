@@ -115,10 +115,13 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const [navFavorites, setNavFavorites] = useState<RaceId[]>(() =>
     loadFromStorage<RaceId[]>('nav-favorites', [])
   );
-  // Workout weekly goal slider (miles)
-  const [workoutGoal, setWorkoutGoal] = useState<number>(() =>
-    loadFromStorage<number>('workout-weekly-goal', 25)
+  // Per-workout weekly goals (miles/sessions)
+  const [workoutGoals, setWorkoutGoals] = useState<Record<string, number>>(() =>
+    loadFromStorage<Record<string, number>>('workout-weekly-goals', {
+      running: 25, swimming: 10, cycling: 100, climbing: 5, surfing: 4, snowboarding: 4,
+    })
   );
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   // Quick-input state
   const [quickInputRace, setQuickInputRace] = useState<RaceId | ''>('');
   const [quickInputValues, setQuickInputValues] = useState<Record<string, string>>({});
@@ -582,14 +585,14 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     const workoutIds: RaceId[] = ['running', 'swimming', 'cycling', 'climbing', 'surfing', 'snowboarding'];
     const allIds: RaceId[] = [...raceIds, ...workoutIds];
 
-    // Override workout goals with the slider value
+    // Override workout goals with per-workout slider values
     const WORKOUT_GOAL_MAP: Record<string, Record<string, number>> = {
-      'running': { run: workoutGoal },
-      'swimming': { swim: workoutGoal },
-      'cycling': { ride: workoutGoal },
-      'climbing': { climb: workoutGoal },
-      'surfing': { surf: workoutGoal },
-      'snowboarding': { snowboard: workoutGoal },
+      'running': { run: workoutGoals.running ?? 25 },
+      'swimming': { swim: workoutGoals.swimming ?? 10 },
+      'cycling': { ride: workoutGoals.cycling ?? 100 },
+      'climbing': { climb: workoutGoals.climbing ?? 5 },
+      'surfing': { surf: workoutGoals.surfing ?? 4 },
+      'snowboarding': { snowboard: workoutGoals.snowboarding ?? 4 },
     };
     const getGoals = (raceId: RaceId) => WORKOUT_GOAL_MAP[raceId] || WEEKLY_GOALS[raceId];
 
@@ -764,7 +767,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
       raceProgress,
       distanceTable,
     };
-  }, [weekKeys, currentWeekKey, workoutGoal]);
+  }, [weekKeys, currentWeekKey, workoutGoals]);
 
   const tooltipStyle = {
     backgroundColor: 'rgba(19, 19, 19, 0.95)',
@@ -1011,9 +1014,12 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
   const renderWorkoutVolumeBar = () => renderBarChart('Workout Volume Breakdown', aggregatedData.workoutLineData, aggregatedData.workoutActiveDisciplines, 'Log workouts to see volume breakdown');
   const renderWorkoutDistribution = () => renderPieChart('Workout Distribution', aggregatedData.workoutPieData, 'Log workouts to see distribution');
 
-  const handleWorkoutGoalChange = (val: number) => {
-    setWorkoutGoal(val);
-    saveToStorage('workout-weekly-goal', val);
+  const handleWorkoutGoalChange = (raceId: string, val: number) => {
+    setWorkoutGoals(prev => {
+      const next = { ...prev, [raceId]: val };
+      saveToStorage('workout-weekly-goals', next);
+      return next;
+    });
   };
 
   const renderDistanceTable = () => {
@@ -1025,38 +1031,27 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     // Flatten to one column per workout (use first discipline's distance)
     const columns = workoutRows.map(r => {
       const d = r.disciplines[0];
-      return { name: r.name, done: d?.done ?? 0, goal: d?.goal ?? 0, unit: d?.unit ?? '' };
+      return { raceId: r.raceId, name: r.name, done: d?.done ?? 0, goal: d?.goal ?? 0, unit: d?.unit ?? '' };
     });
 
     return (
-      <div className="glass p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
-          <span className="text-[10px] text-gray-500">Goal: <span className="text-white font-semibold">{workoutGoal} mi</span></span>
-        </div>
-
-        {/* Goal slider */}
-        <div className="flex items-center gap-4">
-          <span className="text-[10px] text-gray-600 flex-shrink-0">0</span>
-          <input
-            type="range"
-            min={0}
-            max={200}
-            step={5}
-            value={workoutGoal}
-            onChange={(e) => handleWorkoutGoalChange(Number(e.target.value))}
-            className="flex-1 h-1.5 appearance-none bg-white/[0.06] rounded-full cursor-pointer accent-[#CCF472]"
-          />
-          <span className="text-[10px] text-gray-600 flex-shrink-0">200</span>
-        </div>
+      <div className="glass p-5 space-y-3">
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week's Distances</h3>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/[0.06]">
                 {columns.map(c => (
-                  <th key={c.name} className="text-center text-[10px] text-gray-500 uppercase tracking-wider font-semibold py-2 px-4">
-                    {c.name}
+                  <th key={c.raceId} className="text-center py-2 px-4">
+                    <button
+                      onClick={() => setEditingGoalId(editingGoalId === c.raceId ? null : c.raceId)}
+                      className={`text-[10px] uppercase tracking-wider font-semibold transition-colors ${
+                        editingGoalId === c.raceId ? 'text-[#CCF472]' : 'text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      {c.name}
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -1066,7 +1061,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                 {columns.map(c => {
                   const pct = c.goal > 0 ? Math.min(100, Math.round((c.done / c.goal) * 100)) : 0;
                   return (
-                    <td key={c.name} className="text-center py-3 px-4">
+                    <td key={c.raceId} className="text-center py-3 px-4">
                       <span className={`text-sm font-semibold ${c.done > 0 ? 'text-white' : 'text-gray-600'}`}>
                         {c.done} {c.unit}
                       </span>
@@ -1081,10 +1076,41 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
                           />
                         </div>
                       )}
+                      <div className="text-[10px] text-gray-600 mt-1">/ {c.goal} {c.unit}</div>
                     </td>
                   );
                 })}
               </tr>
+
+              {/* Per-workout goal slider row — shown when a workout header is clicked */}
+              {editingGoalId && columns.some(c => c.raceId === editingGoalId) && (
+                <tr>
+                  {columns.map(c => (
+                    <td key={c.raceId} className="px-2 py-3">
+                      {c.raceId === editingGoalId ? (
+                        <div className="space-y-2">
+                          <div className="text-[10px] text-gray-500 text-center">
+                            Goal: <span className="text-white font-semibold">{workoutGoals[c.raceId] ?? 0} {c.unit}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={200}
+                            step={1}
+                            value={workoutGoals[c.raceId] ?? 0}
+                            onChange={(e) => handleWorkoutGoalChange(c.raceId, Number(e.target.value))}
+                            className="w-full h-1.5 appearance-none bg-white/[0.06] rounded-full cursor-pointer accent-[#CCF472]"
+                          />
+                          <div className="flex justify-between text-[9px] text-gray-600">
+                            <span>0</span>
+                            <span>200</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </td>
+                  ))}
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
