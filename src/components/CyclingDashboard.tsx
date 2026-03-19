@@ -5,6 +5,7 @@ import StatsCard from './StatsCard';
 import LevelTimeline from './LevelTimeline';
 import WorkoutLogger from './WorkoutLogger';
 import NutritionInsights from './NutritionInsights';
+import ActivityCharts from './ActivityCharts';
 
 export default function CyclingDashboard() {
   const [speed, setSpeed] = useState(() => loadFromStorage('cycling-speed', 16));
@@ -94,9 +95,11 @@ export default function CyclingDashboard() {
         </table>
       </div>
 
-      <NutritionInsights estimatedSeconds={rideSplit} raceType="cycling" distanceMiles={distance} />
-
       <WorkoutLogger raceId="cycling" />
+
+      <ActivityCharts raceId="cycling" />
+
+      <NutritionInsights estimatedSeconds={rideSplit} raceType="cycling" distanceMiles={distance} />
     </div>
   );
 }
