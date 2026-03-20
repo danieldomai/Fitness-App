@@ -22,6 +22,12 @@ const MEAL_COLORS: Record<string, string> = {
 
 const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#EF4444' };
 
+// Distinct palette for inventory items (up to 10 unique meals)
+const INVENTORY_COLORS = [
+  '#CCF472', '#3B82F6', '#F59E0B', '#EF6C57', '#8B5CF6',
+  '#06B6D4', '#EC4899', '#10B981', '#F97316', '#A78BFA',
+];
+
 const tooltipStyle = {
   contentStyle: { background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, fontSize: 12 },
   itemStyle: { color: '#E5E7EB' },
@@ -130,6 +136,22 @@ export default function NutritionPage() {
     { name: 'Carbs', value: todayMacros.carbs, color: MACRO_COLORS.carbs },
     { name: 'Fat', value: todayMacros.fat, color: MACRO_COLORS.fat },
   ], [todayMacros]);
+
+  // ── Live Inventory chart data ──
+  const inventoryChartData = useMemo(() => {
+    return mealPrep.items
+      .filter(item => item.count > 0)
+      .map((item, idx) => ({
+        name: item.recipeName,
+        value: item.count,
+        color: INVENTORY_COLORS[idx % INVENTORY_COLORS.length],
+        calories: item.macrosPerPortion.calories,
+      }));
+  }, [mealPrep]);
+
+  const inventoryTotal = useMemo(() =>
+    inventoryChartData.reduce((sum, d) => sum + d.value, 0),
+  [inventoryChartData]);
 
   // ── Helpers ──
 
@@ -561,6 +583,54 @@ export default function NutritionPage() {
         </div>
       </div>
 
+      {/* Live Inventory Monitor */}
+      <div className="glass p-5">
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Live Inventory Monitor</h3>
+        {inventoryChartData.length > 0 ? (
+          <div className="flex items-center gap-6">
+            <div className="relative flex-shrink-0">
+              <ResponsiveContainer width={180} height={180}>
+                <PieChart>
+                  <Pie
+                    data={inventoryChartData}
+                    cx="50%" cy="50%"
+                    innerRadius={55} outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value" nameKey="name"
+                  >
+                    {inventoryChartData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value, name) => [`${value} portions`, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-bold text-white">{inventoryTotal}</span>
+                <span className="text-[8px] text-gray-600 uppercase tracking-wider">Total</span>
+              </div>
+            </div>
+            <div className="flex-1 space-y-1.5">
+              {inventoryChartData.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: item.color }} />
+                  <span className="text-xs text-gray-300 truncate flex-1">{item.name}</span>
+                  <span className="text-xs font-medium text-white tabular-nums">{item.value}</span>
+                  <span className="text-[9px] text-gray-600">{item.calories} kcal/ea</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-[180px] text-xs text-gray-600">
+            No meals in inventory — cook a batch to get started
+          </div>
+        )}
+      </div>
+
       {/* Weekly Macro Stacked Bar */}
       <div className="glass p-5">
         <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Daily Macro Breakdown (Past 7 Days)</h3>
@@ -749,6 +819,62 @@ export default function NutritionPage() {
               <div className="text-xs text-gray-500 mt-1">P {perPortion.protein}g | C {perPortion.carbs}g | F {perPortion.fat}g</div>
             </div>
           </div>
+
+          {/* Recipe Macro Profile */}
+          {perPortion.protein + perPortion.carbs + perPortion.fat > 0 && (
+            <div className="mt-5 pt-5 border-t border-white/[0.06]">
+              <h4 className="text-[9px] text-gray-600 uppercase tracking-wider mb-3">Macro Profile (Per Portion)</h4>
+              <div className="flex items-center gap-6">
+                <div className="relative flex-shrink-0">
+                  <ResponsiveContainer width={140} height={140}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Protein', value: perPortion.protein, color: MACRO_COLORS.protein },
+                          { name: 'Carbs', value: perPortion.carbs, color: MACRO_COLORS.carbs },
+                          { name: 'Fat', value: perPortion.fat, color: MACRO_COLORS.fat },
+                        ]}
+                        cx="50%" cy="50%"
+                        innerRadius={40} outerRadius={60}
+                        paddingAngle={3}
+                        dataKey="value" nameKey="name"
+                      >
+                        <Cell fill={MACRO_COLORS.protein} />
+                        <Cell fill={MACRO_COLORS.carbs} />
+                        <Cell fill={MACRO_COLORS.fat} />
+                      </Pie>
+                      <Tooltip {...tooltipStyle} formatter={(value) => `${Number(value).toFixed(1)}g`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-sm font-bold text-white">{perPortion.calories}</span>
+                    <span className="text-[7px] text-gray-600">kcal</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { label: 'Protein', value: perPortion.protein, color: MACRO_COLORS.protein },
+                    { label: 'Carbs', value: perPortion.carbs, color: MACRO_COLORS.carbs },
+                    { label: 'Fat', value: perPortion.fat, color: MACRO_COLORS.fat },
+                  ].map(m => {
+                    const totalG = perPortion.protein + perPortion.carbs + perPortion.fat;
+                    const pct = totalG > 0 ? Math.round((m.value / totalG) * 100) : 0;
+                    return (
+                      <div key={m.label} className="flex items-center gap-3">
+                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: m.color }} />
+                        <span className="text-xs text-gray-400 w-14">{m.label}</span>
+                        <div className="w-20 bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: m.color }} />
+                        </div>
+                        <span className="text-xs font-medium text-white tabular-nums w-10 text-right">{m.value}g</span>
+                        <span className="text-[9px] text-gray-600 w-8 text-right">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cook batch with editable count */}
           <div className="flex items-center gap-3 mt-4">

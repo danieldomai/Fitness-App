@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { loadFromStorage, saveToStorage } from '../utils';
 import type { MealPrepInventory, ConsumedMeal, DailyLog } from '../nutritionTypes';
 import { dailyTotalMacros } from '../nutritionTypes';
@@ -137,6 +138,29 @@ export default function ActivePrepsCard({ onNavigate }: Props) {
   const activeItems = mealPrep.items.filter(i => i.count > 0);
   const calPct = calorieGoal > 0 ? Math.min(100, (todayMacros.calories / calorieGoal) * 100) : 0;
 
+  const INVENTORY_COLORS = [
+    '#CCF472', '#3B82F6', '#F59E0B', '#EF6C57', '#8B5CF6',
+    '#06B6D4', '#EC4899', '#10B981', '#F97316', '#A78BFA',
+  ];
+
+  const inventoryChartData = useMemo(() =>
+    activeItems.map((item, idx) => ({
+      name: item.recipeName,
+      value: item.count,
+      color: INVENTORY_COLORS[idx % INVENTORY_COLORS.length],
+    })),
+  [activeItems]);
+
+  const inventoryTotal = useMemo(() =>
+    inventoryChartData.reduce((sum, d) => sum + d.value, 0),
+  [inventoryChartData]);
+
+  const tooltipStyle = {
+    contentStyle: { background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, fontSize: 12 },
+    itemStyle: { color: '#E5E7EB' },
+    labelStyle: { color: '#9CA3AF' },
+  };
+
   if (activeItems.length === 0) {
     return (
       <div className="glass p-5 cursor-pointer hover:border-[#CCF472]/20 transition-colors" onClick={onNavigate}>
@@ -186,6 +210,49 @@ export default function ActivePrepsCard({ onNavigate }: Props) {
           {todayMacros.calories} / {calorieGoal}
         </span>
       </div>
+
+      {/* Live Inventory Donut */}
+      {inventoryChartData.length > 1 && (
+        <div className="mb-4 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-4">
+            <div className="relative flex-shrink-0">
+              <ResponsiveContainer width={120} height={120}>
+                <PieChart>
+                  <Pie
+                    data={inventoryChartData}
+                    cx="50%" cy="50%"
+                    innerRadius={38} outerRadius={55}
+                    paddingAngle={3}
+                    dataKey="value" nameKey="name"
+                    animationDuration={400}
+                  >
+                    {inventoryChartData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value, name) => [`${value} portions`, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-lg font-bold text-white">{inventoryTotal}</span>
+                <span className="text-[7px] text-gray-600 uppercase">Total</span>
+              </div>
+            </div>
+            <div className="flex-1 space-y-1">
+              {inventoryChartData.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: item.color }} />
+                  <span className="text-[10px] text-gray-400 truncate flex-1">{item.name}</span>
+                  <span className="text-[10px] font-medium text-white tabular-nums">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Prep items */}
       <div className="space-y-2">
