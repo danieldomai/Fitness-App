@@ -67,6 +67,17 @@ export interface ShoppingItem {
   unit: string;
   reason: string;         // e.g., "Needed for Chicken & Rice (deficit: 500g)"
   checked: boolean;
+  source: 'recipe' | 'manual';   // auto-generated from cook batch or manually added
+}
+
+export interface BuyHistoryItem {
+  id: string;
+  name: string;
+  amount: number;
+  unit: string;
+  reason: string;
+  purchasedAt: string;    // ISO timestamp
+  addedToPantry: boolean; // whether pantry was incremented
 }
 
 // ── Helper: compute total macros for a recipe ──

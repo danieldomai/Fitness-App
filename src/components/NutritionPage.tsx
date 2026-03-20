@@ -7,7 +7,7 @@ import { loadFromStorage, saveToStorage } from '../utils';
 import type {
   Recipe, Ingredient, MealPrepInventory,
   ConsumedMeal, DailyLog, PantryItem, ShoppingItem,
-  Macros,
+  BuyHistoryItem, Macros,
 } from '../nutritionTypes';
 import {
   recipeTotalMacros, recipePerPortionMacros, dailyTotalMacros,
@@ -89,6 +89,11 @@ export default function NutritionPage() {
     loadFromStorage('nutrition-shopping-list', []),
   );
 
+  // ── Buy history ──
+  const [buyHistory, setBuyHistory] = useState<BuyHistoryItem[]>(() =>
+    loadFromStorage('nutrition-buy-history', []),
+  );
+
   // ── UI State ──
   const [subView, setSubView] = useState<SubView>('overview');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
@@ -107,6 +112,10 @@ export default function NutritionPage() {
 
   // ── New pantry item state ──
   const [newPantryItem, setNewPantryItem] = useState({ name: '', amount: '', unit: 'g', category: 'other' });
+
+  // ── Shopping quick-add state ──
+  const [quickShopItem, setQuickShopItem] = useState({ name: '', amount: '', unit: 'g' });
+  const [showBuyHistory, setShowBuyHistory] = useState(false);
 
   // ── Derived data ──
   const todayLog = dailyLogs[today] || { date: today, meals: [], calorieGoal, macroGoals };
@@ -178,6 +187,99 @@ export default function NutritionPage() {
   function saveShopping(updated: ShoppingItem[]) {
     setShoppingList(updated);
     saveToStorage('nutrition-shopping-list', updated);
+  }
+
+  function saveBuyHistory(updated: BuyHistoryItem[]) {
+    setBuyHistory(updated);
+    saveToStorage('nutrition-buy-history', updated);
+  }
+
+  // ── Quick-add to shopping list ──
+  function handleQuickAddShopping() {
+    if (!quickShopItem.name.trim()) return;
+    const item: ShoppingItem = {
+      id: uid(),
+      name: quickShopItem.name.trim(),
+      amount: parseFloat(quickShopItem.amount) || 1,
+      unit: quickShopItem.unit,
+      reason: 'Manually added',
+      checked: false,
+      source: 'manual',
+    };
+    saveShopping([item, ...shoppingList]);
+    setQuickShopItem({ name: '', amount: '', unit: 'g' });
+  }
+
+  // ── Mark item as bought: move to history + sync pantry ──
+  function markAsBought(item: ShoppingItem) {
+    // Remove from active list
+    saveShopping(shoppingList.filter(s => s.id !== item.id));
+
+    // Add to pantry (increment if exists, create if not)
+    const updatedPantry = [...pantry];
+    const pantryIdx = updatedPantry.findIndex(
+      p => p.name.toLowerCase() === item.name.toLowerCase() && p.unit === item.unit,
+    );
+    if (pantryIdx >= 0) {
+      updatedPantry[pantryIdx] = {
+        ...updatedPantry[pantryIdx],
+        amount: updatedPantry[pantryIdx].amount + item.amount,
+      };
+    } else {
+      updatedPantry.push({
+        id: uid(),
+        name: item.name,
+        amount: item.amount,
+        unit: item.unit,
+        category: 'other',
+      });
+    }
+    savePantry(updatedPantry);
+
+    // Archive to buy history
+    const historyItem: BuyHistoryItem = {
+      id: uid(),
+      name: item.name,
+      amount: item.amount,
+      unit: item.unit,
+      reason: item.reason,
+      purchasedAt: new Date().toISOString(),
+      addedToPantry: true,
+    };
+    saveBuyHistory([historyItem, ...buyHistory]);
+  }
+
+  // ── Restore from history back to active list ──
+  function restoreFromHistory(historyItem: BuyHistoryItem) {
+    // Remove from history
+    saveBuyHistory(buyHistory.filter(h => h.id !== historyItem.id));
+
+    // Add back to shopping list
+    const restored: ShoppingItem = {
+      id: uid(),
+      name: historyItem.name,
+      amount: historyItem.amount,
+      unit: historyItem.unit,
+      reason: historyItem.reason || 'Restored from history',
+      checked: false,
+      source: 'manual',
+    };
+    saveShopping([restored, ...shoppingList]);
+
+    // Revert pantry increment if it was added
+    if (historyItem.addedToPantry) {
+      const updatedPantry = [...pantry];
+      const pantryIdx = updatedPantry.findIndex(
+        p => p.name.toLowerCase() === historyItem.name.toLowerCase() && p.unit === historyItem.unit,
+      );
+      if (pantryIdx >= 0) {
+        updatedPantry[pantryIdx] = {
+          ...updatedPantry[pantryIdx],
+          amount: Math.max(0, updatedPantry[pantryIdx].amount - historyItem.amount),
+        };
+        savePantry(updatedPantry);
+      }
+    }
   }
 
   // ── Consume a meal-prep portion ──
@@ -303,6 +405,7 @@ export default function NutritionPage() {
             unit: ing.unit,
             reason: `Out of stock after ${recipe.name}`,
             checked: false,
+            source: 'recipe',
           });
         }
       } else {
@@ -313,6 +416,7 @@ export default function NutritionPage() {
           unit: ing.unit,
           reason: `Not in pantry (needed for ${recipe.name})`,
           checked: false,
+          source: 'recipe',
         });
       }
     }
@@ -1024,35 +1128,152 @@ export default function NutritionPage() {
       )}
 
       {/* Shopping List */}
-      <div className="glass p-5">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Shopping List</h3>
+      <div className="glass p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Shopping List</h3>
+          <span className="text-[9px] text-gray-600">{shoppingList.length} item{shoppingList.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Quick Add */}
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Item</label>
+            <input
+              value={quickShopItem.name}
+              onChange={(e) => setQuickShopItem({ ...quickShopItem, name: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && handleQuickAddShopping()}
+              className="w-full glass-input px-2 py-1.5 text-xs"
+              placeholder="e.g. Greek Yogurt"
+            />
+          </div>
+          <div className="w-20">
+            <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Qty</label>
+            <input
+              type="number" min="0" step="any"
+              value={quickShopItem.amount}
+              onChange={(e) => setQuickShopItem({ ...quickShopItem, amount: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && handleQuickAddShopping()}
+              className="w-full glass-input px-2 py-1.5 text-xs"
+              placeholder="1"
+            />
+          </div>
+          <div className="w-20">
+            <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Unit</label>
+            <select
+              value={quickShopItem.unit}
+              onChange={(e) => setQuickShopItem({ ...quickShopItem, unit: e.target.value })}
+              className="w-full glass-input px-1 py-1.5 text-xs bg-transparent"
+            >
+              {['g', 'ml', 'oz', 'cups', 'tbsp', 'tsp', 'whole', 'lbs', 'kg', 'tubs', 'packs', 'bags'].map(u =>
+                <option key={u} value={u} className="bg-[#0E0E0E]">{u}</option>
+              )}
+            </select>
+          </div>
+          <button
+            onClick={handleQuickAddShopping}
+            className="glow-btn px-4 py-1.5 text-xs flex-shrink-0"
+          >
+            + Add
+          </button>
+        </div>
+
+        {/* Active Items */}
         {shoppingList.length === 0 ? (
-          <div className="text-xs text-gray-600">No items needed. Cook a batch to auto-generate needs.</div>
+          <div className="text-xs text-gray-600 text-center py-4">No items needed. Cook a batch or add manually above.</div>
         ) : (
           <div className="space-y-1.5">
             {shoppingList.map(item => (
-              <div key={item.id} className={`flex items-center justify-between rounded px-3 py-2 border border-white/[0.04] ${item.checked ? 'opacity-40' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => saveShopping(shoppingList.map(s => s.id === item.id ? { ...s, checked: !s.checked } : s))}
-                    className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] transition-colors ${item.checked ? 'bg-[#CCF472] border-[#CCF472] text-[#0E0E0E]' : 'border-white/[0.15] text-transparent'}`}
-                  >
-                    {item.checked ? '✓' : ''}
-                  </button>
-                  <div>
-                    <div className={`text-xs ${item.checked ? 'line-through text-gray-600' : 'text-gray-300'}`}>
-                      {item.name} — {item.amount} {item.unit}
-                    </div>
-                    <div className="text-[9px] text-gray-600">{item.reason}</div>
+              <div key={item.id} className="flex items-center gap-3 rounded px-3 py-2.5 border border-white/[0.04] bg-white/[0.01] group hover:border-white/[0.08] transition-colors">
+                {/* Bought checkbox */}
+                <button
+                  onClick={() => markAsBought(item)}
+                  className="w-5 h-5 rounded border border-white/[0.15] flex items-center justify-center text-[10px] transition-all hover:border-[#CCF472]/50 hover:bg-[#CCF472]/10 text-transparent hover:text-[#CCF472] flex-shrink-0"
+                  title="Mark as bought (adds to pantry)"
+                >
+                  ✓
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-300">{item.name}</span>
+                    <span className="text-[9px] text-gray-600">— {item.amount} {item.unit}</span>
+                    {item.source === 'recipe' && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 uppercase tracking-wider font-medium">Recipe</span>
+                    )}
+                    {item.source === 'manual' && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 uppercase tracking-wider font-medium">Manual</span>
+                    )}
                   </div>
+                  <div className="text-[9px] text-gray-600 truncate">{item.reason}</div>
                 </div>
-                <button onClick={() => saveShopping(shoppingList.filter(s => s.id !== item.id))} className="text-[10px] text-gray-600 hover:text-red-400">x</button>
+                <button
+                  onClick={() => saveShopping(shoppingList.filter(s => s.id !== item.id))}
+                  className="text-[10px] text-gray-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                >
+                  Remove
+                </button>
               </div>
             ))}
-            {shoppingList.some(s => s.checked) && (
-              <button onClick={() => saveShopping(shoppingList.filter(s => !s.checked))} className="text-[10px] text-gray-500 hover:text-white transition-colors mt-2">
-                Clear checked items
-              </button>
+          </div>
+        )}
+      </div>
+
+      {/* Buy History */}
+      <div className="glass p-5">
+        <button
+          onClick={() => setShowBuyHistory(!showBuyHistory)}
+          className="w-full flex items-center justify-between"
+        >
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+            Recently Bought
+            {buyHistory.length > 0 && (
+              <span className="ml-2 text-[9px] text-gray-600 font-normal">({buyHistory.length})</span>
+            )}
+          </h3>
+          <svg
+            className={`w-3.5 h-3.5 text-gray-600 transition-transform ${showBuyHistory ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showBuyHistory && (
+          <div className="mt-3 space-y-1.5">
+            {buyHistory.length === 0 ? (
+              <div className="text-xs text-gray-600 text-center py-3">No purchase history yet.</div>
+            ) : (
+              <>
+                {buyHistory.map(item => {
+                  const date = new Date(item.purchasedAt);
+                  const timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                    ' at ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 rounded px-3 py-2 border border-white/[0.03] bg-white/[0.01]">
+                      <svg className="w-3.5 h-3.5 text-[#CCF472] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-500 line-through">{item.name} — {item.amount} {item.unit}</div>
+                        <div className="text-[9px] text-gray-700">{timeStr}{item.addedToPantry && ' · Added to pantry'}</div>
+                      </div>
+                      <button
+                        onClick={() => restoreFromHistory(item)}
+                        className="text-[9px] text-gray-600 hover:text-[#CCF472] transition-colors flex-shrink-0 px-2 py-1 rounded hover:bg-white/[0.04]"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => saveBuyHistory([])}
+                    className="text-[10px] text-gray-600 hover:text-red-400 transition-colors"
+                  >
+                    Clear History
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}
