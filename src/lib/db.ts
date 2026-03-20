@@ -48,6 +48,8 @@ const SETTING_KEYS = new Set([
   'user-profile', 'dashboard-layout', 'active-races', 'active-race',
   'hyrox-gender', 'hyrox-division', 'hyrox-station-goal-inputs',
   'nav-favorites',
+  'nutrition-calorie-goal', 'nutrition-macro-goals', 'nutrition-daily-log',
+  'nutrition-recipes', 'nutrition-meal-prep', 'nutrition-pantry', 'nutrition-shopping-list',
 ]);
 
 function persistToSupabase(key: string, value: unknown): void {

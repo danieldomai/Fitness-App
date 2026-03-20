@@ -7,9 +7,11 @@ interface Props {
   activeRace: RaceId | null;
   onSelect: (id: RaceId) => void;
   onHome: () => void;
+  onNutrition: () => void;
+  view: string;
 }
 
-export default function NavBar({ activeRace, onSelect, onHome }: Props) {
+export default function NavBar({ activeRace, onSelect, onHome, onNutrition, view }: Props) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownSub, setDropdownSub] = useState<'races' | 'workouts' | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,16 @@ export default function NavBar({ activeRace, onSelect, onHome }: Props) {
             }`}
           >
             Home
+          </button>
+          <button
+            onClick={onNutrition}
+            className={`whitespace-nowrap px-4 py-2 rounded text-sm font-medium transition-colors flex-shrink-0 ${
+              view === 'nutrition'
+                ? 'bg-[#CCF472] text-[#0E0E0E] font-bold'
+                : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            Nutrition
           </button>
           <div className="w-px h-5 bg-white/[0.08] mx-1 flex-shrink-0" />
 

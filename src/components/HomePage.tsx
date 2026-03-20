@@ -10,10 +10,12 @@ import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime
 import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
+import NutritionDashboardCard from './NutritionDashboardCard';
 
 interface Props {
   onSelect: (id: RaceId) => void;
   onBreakdown: () => void;
+  onNutrition: () => void;
 }
 
 interface UserProfile {
@@ -42,6 +44,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'workout-volume', label: 'Workout Volume Trend (Line)', visible: true },
   { id: 'workout-bar', label: 'Workout Volume Breakdown (Bar)', visible: true },
   { id: 'workout-distribution', label: 'Workout Distribution (Pie)', visible: true },
+  { id: 'nutrition-card', label: 'Daily Nutrition', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
 
@@ -107,7 +110,7 @@ const QUOTES = [
   { text: 'Push yourself because no one else is going to do it for you.', author: 'Unknown' },
 ];
 
-export default function HomePage({ onSelect, onBreakdown }: Props) {
+export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) {
   const [profile, setProfile] = useState<UserProfile>(() =>
     loadFromStorage('user-profile', { name: '', age: '', weight: '', height: '', gender: '' })
   );
@@ -1305,6 +1308,7 @@ export default function HomePage({ onSelect, onBreakdown }: Props) {
     'workout-distribution': renderWorkoutDistribution,
     'race-progress': renderRaceProgress,
     'distance-table': renderDistanceTable,
+    'nutrition-card': () => <NutritionDashboardCard onNavigate={onNutrition} />,
   };
 
   // Group sections: profile+recovery+quick-stats go into the top 3-col grid,

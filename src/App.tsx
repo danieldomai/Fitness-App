@@ -9,8 +9,9 @@ import HyroxDashboard from './components/HyroxDashboard';
 import TriathlonDashboard from './components/TriathlonDashboard';
 import CyclingDashboard from './components/CyclingDashboard';
 import GenericWorkoutDashboard from './components/GenericWorkoutDashboard';
+import NutritionPage from './components/NutritionPage';
 
-type View = 'home' | 'breakdown' | 'race';
+type View = 'home' | 'breakdown' | 'race' | 'nutrition';
 
 export default function App() {
   const [activeRace, setActiveRace] = useState<RaceId | null>(() =>
@@ -34,6 +35,10 @@ export default function App() {
     setView('breakdown');
   };
 
+  const handleNutrition = () => {
+    setView('nutrition');
+  };
+
   const handleBreakdownBack = () => {
     if (activeRace) {
       setView('race');
@@ -44,10 +49,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0E0E0E] text-gray-200 relative">
-      <NavBar activeRace={activeRace} onSelect={handleRaceSelect} onHome={handleHome} />
+      <NavBar activeRace={activeRace} onSelect={handleRaceSelect} onHome={handleHome} onNutrition={handleNutrition} view={view} />
 
-      {view === 'home' && <HomePage onSelect={handleRaceSelect} onBreakdown={handleBreakdown} />}
+      {view === 'home' && <HomePage onSelect={handleRaceSelect} onBreakdown={handleBreakdown} onNutrition={handleNutrition} />}
       {view === 'breakdown' && <BreakdownPage onBack={handleBreakdownBack} />}
+      {view === 'nutrition' && <NutritionPage />}
 
       {view === 'race' && activeRace && (
         <main className="max-w-4xl mx-auto px-4 py-6">
