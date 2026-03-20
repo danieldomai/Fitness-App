@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { loadFromStorage } from '../utils';
-import type { MealPrepInventory, DailyLog, ConsumedMeal, Macros } from '../nutritionTypes';
+import type { MealPrepInventory, DailyLog, ConsumedMeal } from '../nutritionTypes';
 import { dailyTotalMacros } from '../nutritionTypes';
 
 interface Props {

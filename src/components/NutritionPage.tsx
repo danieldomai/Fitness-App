@@ -551,7 +551,7 @@ export default function NutritionPage() {
                     <Cell key={idx} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}g`} />
+                <Tooltip {...tooltipStyle} formatter={(value) => `${Number(value).toFixed(1)}g`} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
               </PieChart>
             </ResponsiveContainer>
@@ -572,7 +572,7 @@ export default function NutritionPage() {
           })}>
             <XAxis dataKey="day" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} width={35} />
-            <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}g`} />
+            <Tooltip {...tooltipStyle} formatter={(value) => `${Number(value).toFixed(1)}g`} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
             <Bar dataKey="protein" stackId="a" fill={MACRO_COLORS.protein} radius={[0, 0, 0, 0]} />
             <Bar dataKey="carbs" stackId="a" fill={MACRO_COLORS.carbs} />
