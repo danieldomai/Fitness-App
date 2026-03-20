@@ -11,6 +11,7 @@ import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorko
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
 import NutritionDashboardCard from './NutritionDashboardCard';
+import ActivePrepsCard from './ActivePrepsCard';
 
 interface Props {
   onSelect: (id: RaceId) => void;
@@ -45,6 +46,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'workout-bar', label: 'Workout Volume Breakdown (Bar)', visible: true },
   { id: 'workout-distribution', label: 'Workout Distribution (Pie)', visible: true },
   { id: 'nutrition-card', label: 'Daily Nutrition', visible: true },
+  { id: 'active-preps', label: 'Active Preps', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
 
@@ -1309,6 +1311,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     'race-progress': renderRaceProgress,
     'distance-table': renderDistanceTable,
     'nutrition-card': () => <NutritionDashboardCard onNavigate={onNutrition} />,
+    'active-preps': () => <ActivePrepsCard onNavigate={onNutrition} />,
   };
 
   // Group sections: profile+recovery+quick-stats go into the top 3-col grid,
