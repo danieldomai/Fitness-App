@@ -51,6 +51,7 @@ const SETTING_KEYS = new Set([
   'nutrition-calorie-goal', 'nutrition-macro-goals', 'nutrition-daily-log',
   'nutrition-recipes', 'nutrition-meal-prep', 'nutrition-pantry', 'nutrition-shopping-list',
   'nutrition-buy-history',
+  'nutrition-micro-goals',
 ]);
 
 function persistToSupabase(key: string, value: unknown): void {

@@ -7,12 +7,31 @@ export interface Macros {
   fat: number;       // grams
 }
 
+export interface Micros {
+  potassium: number;   // mg
+  calcium: number;     // mg
+  iron: number;        // mg
+  vitaminD: number;    // mcg
+  sodium: number;      // mg
+}
+
+export const EMPTY_MICROS: Micros = { potassium: 0, calcium: 0, iron: 0, vitaminD: 0, sodium: 0 };
+
+export const DEFAULT_MICRO_GOALS: Micros = {
+  potassium: 4700,   // mg
+  calcium: 1000,     // mg
+  iron: 18,          // mg
+  vitaminD: 20,      // mcg
+  sodium: 2300,      // mg
+};
+
 export interface Ingredient {
   id: string;
   name: string;
   amount: number;      // raw weight in grams
   unit: string;        // 'g', 'ml', 'oz', 'cups', etc.
   macros: Macros;      // macros for the specified amount
+  micros?: Micros;     // optional micronutrients for the specified amount
 }
 
 export interface Recipe {
@@ -30,6 +49,7 @@ export interface MealPrepItem {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   count: number;          // remaining portions
   macrosPerPortion: Macros;
+  microsPerPortion?: Micros;
 }
 
 export interface MealPrepInventory {
@@ -41,6 +61,7 @@ export interface ConsumedMeal {
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   name: string;
   macros: Macros;
+  micros?: Micros;
   source: 'prep' | 'manual';   // from meal-prep or manual entry
   timestamp: string;
 }
@@ -114,4 +135,76 @@ export function dailyTotalMacros(meals: ConsumedMeal[]): Macros {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 },
   );
+}
+
+// ── Micronutrient helpers ──
+
+export function recipeTotalMicros(recipe: Recipe): Micros {
+  return recipe.ingredients.reduce(
+    (acc, ing) => {
+      const m = ing.micros || EMPTY_MICROS;
+      return {
+        potassium: acc.potassium + m.potassium,
+        calcium: acc.calcium + m.calcium,
+        iron: acc.iron + m.iron,
+        vitaminD: acc.vitaminD + m.vitaminD,
+        sodium: acc.sodium + m.sodium,
+      };
+    },
+    { ...EMPTY_MICROS },
+  );
+}
+
+export function recipePerPortionMicros(recipe: Recipe): Micros {
+  const total = recipeTotalMicros(recipe);
+  const s = recipe.batchSize || 1;
+  return {
+    potassium: Math.round(total.potassium / s),
+    calcium: Math.round(total.calcium / s),
+    iron: Math.round((total.iron / s) * 10) / 10,
+    vitaminD: Math.round((total.vitaminD / s) * 10) / 10,
+    sodium: Math.round(total.sodium / s),
+  };
+}
+
+/** Sum micronutrients from consumed meals for the day */
+export function dailyTotalMicros(meals: ConsumedMeal[]): Micros {
+  return meals.reduce(
+    (acc, meal) => {
+      const m = meal.micros || EMPTY_MICROS;
+      return {
+        potassium: acc.potassium + m.potassium,
+        calcium: acc.calcium + m.calcium,
+        iron: acc.iron + m.iron,
+        vitaminD: acc.vitaminD + m.vitaminD,
+        sodium: acc.sodium + m.sodium,
+      };
+    },
+    { ...EMPTY_MICROS },
+  );
+}
+
+/** Calculate micronutrients for a set of ingredients scaled by portions */
+export function calculateMicros(ingredients: Ingredient[], portions: number): Micros {
+  const total = ingredients.reduce(
+    (acc, ing) => {
+      const m = ing.micros || EMPTY_MICROS;
+      return {
+        potassium: acc.potassium + m.potassium,
+        calcium: acc.calcium + m.calcium,
+        iron: acc.iron + m.iron,
+        vitaminD: acc.vitaminD + m.vitaminD,
+        sodium: acc.sodium + m.sodium,
+      };
+    },
+    { ...EMPTY_MICROS },
+  );
+  const s = portions || 1;
+  return {
+    potassium: Math.round(total.potassium / s),
+    calcium: Math.round(total.calcium / s),
+    iron: Math.round((total.iron / s) * 10) / 10,
+    vitaminD: Math.round((total.vitaminD / s) * 10) / 10,
+    sodium: Math.round(total.sodium / s),
+  };
 }

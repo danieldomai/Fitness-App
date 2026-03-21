@@ -7,10 +7,12 @@ import { loadFromStorage, saveToStorage } from '../utils';
 import type {
   Recipe, Ingredient, MealPrepInventory,
   ConsumedMeal, DailyLog, PantryItem, ShoppingItem,
-  BuyHistoryItem, Macros,
+  BuyHistoryItem, Macros, Micros,
 } from '../nutritionTypes';
 import {
   recipeTotalMacros, recipePerPortionMacros, dailyTotalMacros,
+  recipePerPortionMicros, dailyTotalMicros,
+  DEFAULT_MICRO_GOALS,
 } from '../nutritionTypes';
 
 const MEAL_COLORS: Record<string, string> = {
@@ -94,6 +96,11 @@ export default function NutritionPage() {
     loadFromStorage('nutrition-buy-history', []),
   );
 
+  // ── Micronutrient goals ──
+  const [microGoals, setMicroGoals] = useState<Micros>(() =>
+    loadFromStorage('nutrition-micro-goals', DEFAULT_MICRO_GOALS),
+  );
+
   // ── UI State ──
   const [subView, setSubView] = useState<SubView>('overview');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
@@ -103,12 +110,12 @@ export default function NutritionPage() {
   const [batchInput, setBatchInput] = useState('5');
 
   // ── Manual meal entry state ──
-  const [manualMeal, setManualMeal] = useState({ name: '', mealType: 'lunch' as ConsumedMeal['mealType'], calories: '', protein: '', carbs: '', fat: '' });
+  const [manualMeal, setManualMeal] = useState({ name: '', mealType: 'lunch' as ConsumedMeal['mealType'], calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
 
   // ── New recipe state ──
   const [newRecipe, setNewRecipe] = useState({ name: '', mealType: 'lunch' as Recipe['mealType'], batchSize: '5' });
   const [newIngredients, setNewIngredients] = useState<Ingredient[]>([]);
-  const [ingForm, setIngForm] = useState({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '' });
+  const [ingForm, setIngForm] = useState({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
 
   // ── New pantry item state ──
   const [newPantryItem, setNewPantryItem] = useState({ name: '', amount: '', unit: 'g', category: 'other' });
@@ -120,6 +127,7 @@ export default function NutritionPage() {
   // ── Derived data ──
   const todayLog = dailyLogs[today] || { date: today, meals: [], calorieGoal, macroGoals };
   const todayMacros = useMemo(() => dailyTotalMacros(todayLog.meals), [todayLog.meals]);
+  const todayMicros = useMemo(() => dailyTotalMicros(todayLog.meals), [todayLog.meals]);
 
   const prepCounts = useMemo(() => {
     const counts = { breakfast: 0, lunch: 0, dinner: 0, snack: 0, total: 0 };
@@ -299,6 +307,7 @@ export default function NutritionPage() {
       mealType: item.mealType,
       name: item.recipeName,
       macros: { ...item.macrosPerPortion },
+      ...(item.microsPerPortion ? { micros: { ...item.microsPerPortion } } : {}),
       source: 'prep',
       timestamp: new Date().toISOString(),
     };
@@ -308,6 +317,7 @@ export default function NutritionPage() {
 
   // ── Log manual meal ──
   function handleLogManualMeal() {
+    const hasMicros = manualMeal.potassium || manualMeal.calcium || manualMeal.iron || manualMeal.vitaminD || manualMeal.sodium;
     const meal: ConsumedMeal = {
       id: uid(),
       mealType: manualMeal.mealType,
@@ -318,12 +328,21 @@ export default function NutritionPage() {
         carbs: parseFloat(manualMeal.carbs) || 0,
         fat: parseFloat(manualMeal.fat) || 0,
       },
+      ...(hasMicros ? {
+        micros: {
+          potassium: parseFloat(manualMeal.potassium) || 0,
+          calcium: parseFloat(manualMeal.calcium) || 0,
+          iron: parseFloat(manualMeal.iron) || 0,
+          vitaminD: parseFloat(manualMeal.vitaminD) || 0,
+          sodium: parseFloat(manualMeal.sodium) || 0,
+        },
+      } : {}),
       source: 'manual',
       timestamp: new Date().toISOString(),
     };
     const log = { ...todayLog, meals: [...todayLog.meals, meal] };
     saveDailyLogs({ ...dailyLogs, [today]: log });
-    setManualMeal({ name: '', mealType: 'lunch', calories: '', protein: '', carbs: '', fat: '' });
+    setManualMeal({ name: '', mealType: 'lunch', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
     setShowAddMeal(false);
   }
 
@@ -345,6 +364,7 @@ export default function NutritionPage() {
 
   // ── Add ingredient to new recipe ──
   function handleAddIngredient() {
+    const hasMicros = ingForm.potassium || ingForm.calcium || ingForm.iron || ingForm.vitaminD || ingForm.sodium;
     const ing: Ingredient = {
       id: uid(),
       name: ingForm.name || 'Ingredient',
@@ -356,14 +376,25 @@ export default function NutritionPage() {
         carbs: parseFloat(ingForm.carbs) || 0,
         fat: parseFloat(ingForm.fat) || 0,
       },
+      ...(hasMicros ? {
+        micros: {
+          potassium: parseFloat(ingForm.potassium) || 0,
+          calcium: parseFloat(ingForm.calcium) || 0,
+          iron: parseFloat(ingForm.iron) || 0,
+          vitaminD: parseFloat(ingForm.vitaminD) || 0,
+          sodium: parseFloat(ingForm.sodium) || 0,
+        },
+      } : {}),
     };
     setNewIngredients([...newIngredients, ing]);
-    setIngForm({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '' });
+    setIngForm({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
   }
 
   // ── Cook batch (add to meal prep + deduct from pantry) ──
   function handleCookBatch(recipe: Recipe, batchCount: number) {
     const perPortion = recipePerPortionMacros(recipe);
+    const microsPer = recipePerPortionMicros(recipe);
+    const hasMicros = microsPer.potassium + microsPer.calcium + microsPer.iron + microsPer.vitaminD + microsPer.sodium > 0;
 
     // Add to meal prep
     const existing = mealPrep.items.findIndex(i => i.recipeId === recipe.id);
@@ -377,6 +408,7 @@ export default function NutritionPage() {
         mealType: recipe.mealType,
         count: batchCount,
         macrosPerPortion: perPortion,
+        ...(hasMicros ? { microsPerPortion: microsPer } : {}),
       });
     }
     saveMealPrep({ items: updatedItems });
@@ -450,6 +482,11 @@ export default function NutritionPage() {
   function updateMacroGoals(updated: Macros) {
     setMacroGoals(updated);
     saveToStorage('nutrition-macro-goals', updated);
+  }
+
+  function updateMicroGoals(updated: Micros) {
+    setMicroGoals(updated);
+    saveToStorage('nutrition-micro-goals', updated);
   }
 
   // ── Delete consumed meal ──
@@ -620,6 +657,32 @@ export default function NutritionPage() {
                 <input type="number" value={manualMeal.fat} onChange={(e) => setManualMeal({ ...manualMeal, fat: e.target.value })} className="w-full glass-input px-2 py-1.5 text-sm" placeholder="g" />
               </div>
             </div>
+            {/* Optional micronutrients */}
+            <details className="mt-1">
+              <summary className="text-[9px] text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-400 transition-colors">+ Micronutrients (optional)</summary>
+              <div className="grid grid-cols-5 gap-2 mt-2">
+                <div>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">Potassium (mg)</label>
+                  <input type="number" value={manualMeal.potassium} onChange={(e) => setManualMeal({ ...manualMeal, potassium: e.target.value })} className="w-full glass-input px-2 py-1 text-xs" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">Calcium (mg)</label>
+                  <input type="number" value={manualMeal.calcium} onChange={(e) => setManualMeal({ ...manualMeal, calcium: e.target.value })} className="w-full glass-input px-2 py-1 text-xs" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">Iron (mg)</label>
+                  <input type="number" value={manualMeal.iron} onChange={(e) => setManualMeal({ ...manualMeal, iron: e.target.value })} className="w-full glass-input px-2 py-1 text-xs" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">Vitamin D (mcg)</label>
+                  <input type="number" value={manualMeal.vitaminD} onChange={(e) => setManualMeal({ ...manualMeal, vitaminD: e.target.value })} className="w-full glass-input px-2 py-1 text-xs" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">Sodium (mg)</label>
+                  <input type="number" value={manualMeal.sodium} onChange={(e) => setManualMeal({ ...manualMeal, sodium: e.target.value })} className="w-full glass-input px-2 py-1 text-xs" placeholder="0" />
+                </div>
+              </div>
+            </details>
             <div className="flex gap-2">
               <button onClick={handleLogManualMeal} className="glow-btn px-4 py-2 text-sm">Log Meal</button>
               <button onClick={() => setShowAddMeal(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">Cancel</button>
@@ -652,21 +715,22 @@ export default function NutritionPage() {
         </div>
       )}
 
-      {/* Charts: Weekly Calorie Trend + Macro Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="glass p-5">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Weekly Calorie Trend</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={weeklyCalorieData}>
-              <XAxis dataKey="day" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip {...tooltipStyle} />
-              <Line type="monotone" dataKey="calories" stroke="#CCF472" strokeWidth={2} dot={{ fill: '#CCF472', r: 3 }} />
-              <Line type="monotone" dataKey="goal" stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" strokeWidth={1} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Charts: Weekly Calorie Trend */}
+      <div className="glass p-5">
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Weekly Calorie Trend</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={weeklyCalorieData}>
+            <XAxis dataKey="day" tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: '#6B7280', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
+            <Tooltip {...tooltipStyle} />
+            <Line type="monotone" dataKey="calories" stroke="#CCF472" strokeWidth={2} dot={{ fill: '#CCF472', r: 3 }} />
+            <Line type="monotone" dataKey="goal" stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" strokeWidth={1} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
+      {/* Macro Split + Micronutrient Table — side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="glass p-5">
           <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Macro Split (Today)</h3>
           {todayMacros.protein + todayMacros.carbs + todayMacros.fat > 0 ? (
@@ -684,6 +748,93 @@ export default function NutritionPage() {
           ) : (
             <div className="flex items-center justify-center h-[200px] text-xs text-gray-600">No meals logged yet today</div>
           )}
+        </div>
+
+        {/* Micronutrient Table */}
+        <div className="glass p-5">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Micronutrients (Today)</h3>
+          <table className="glass-table w-full text-xs">
+            <thead>
+              <tr>
+                <th className="text-left px-3 py-2">Nutrient</th>
+                <th className="text-right px-3 py-2">Consumed</th>
+                <th className="text-right px-3 py-2">% DV</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([
+                { key: 'potassium' as const, label: 'Potassium', unit: 'mg' },
+                { key: 'calcium' as const, label: 'Calcium', unit: 'mg' },
+                { key: 'iron' as const, label: 'Iron', unit: 'mg' },
+                { key: 'vitaminD' as const, label: 'Vitamin D', unit: 'mcg' },
+                { key: 'sodium' as const, label: 'Sodium', unit: 'mg' },
+              ]).map(({ key, label, unit }) => {
+                const consumed = todayMicros[key];
+                const goal = microGoals[key];
+                const pct = goal > 0 ? Math.round((consumed / goal) * 100) : 0;
+                const isComplete = pct >= 100;
+                return (
+                  <tr key={key} className={isComplete ? 'bg-[#CCF472]/[0.04]' : ''}>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={isComplete ? 'text-[#CCF472] font-medium' : 'text-gray-300'}>{label}</span>
+                        {isComplete && (
+                          <svg className="w-3.5 h-3.5 text-[#CCF472]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${isComplete ? 'text-[#CCF472]' : 'text-gray-400'}`}>
+                      {key === 'iron' || key === 'vitaminD' ? consumed.toFixed(1) : consumed} {unit}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, pct)}%`,
+                              background: isComplete ? '#CCF472' : pct >= 70 ? '#3B82F6' : 'rgba(255,255,255,0.2)',
+                            }}
+                          />
+                        </div>
+                        <span className={`text-[10px] tabular-nums w-8 text-right ${isComplete ? 'text-[#CCF472] font-medium' : 'text-gray-500'}`}>
+                          {pct}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Editable micro goals (collapsed by default) */}
+          <details className="mt-3 pt-3 border-t border-white/[0.06]">
+            <summary className="text-[9px] text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-400 transition-colors">
+              Edit Daily Values
+            </summary>
+            <div className="grid grid-cols-5 gap-2 mt-2">
+              {([
+                { key: 'potassium' as const, label: 'K', unit: 'mg' },
+                { key: 'calcium' as const, label: 'Ca', unit: 'mg' },
+                { key: 'iron' as const, label: 'Fe', unit: 'mg' },
+                { key: 'vitaminD' as const, label: 'Vit D', unit: 'mcg' },
+                { key: 'sodium' as const, label: 'Na', unit: 'mg' },
+              ]).map(({ key, label, unit }) => (
+                <div key={key}>
+                  <label className="text-[8px] text-gray-600 block mb-0.5">{label} ({unit})</label>
+                  <input
+                    type="number" min="0" step="any"
+                    value={microGoals[key]}
+                    onChange={(e) => updateMicroGoals({ ...microGoals, [key]: parseFloat(e.target.value) || 0 })}
+                    className="w-full glass-input px-1.5 py-1 text-[10px] text-center"
+                  />
+                </div>
+              ))}
+            </div>
+          </details>
         </div>
       </div>
 
@@ -805,6 +956,17 @@ export default function NutritionPage() {
                 <input type="number" value={ingForm.fat} onChange={(e) => setIngForm({ ...ingForm, fat: e.target.value })} className="w-1/2 glass-input px-1 py-1.5 text-xs" placeholder="F" />
               </div>
             </div>
+            {/* Optional micronutrient fields for ingredient */}
+            <details className="mb-2">
+              <summary className="text-[9px] text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-400 transition-colors">+ Micronutrients (optional)</summary>
+              <div className="grid grid-cols-5 gap-2 mt-2">
+                <input type="number" value={ingForm.potassium} onChange={(e) => setIngForm({ ...ingForm, potassium: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="K (mg)" />
+                <input type="number" value={ingForm.calcium} onChange={(e) => setIngForm({ ...ingForm, calcium: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Ca (mg)" />
+                <input type="number" value={ingForm.iron} onChange={(e) => setIngForm({ ...ingForm, iron: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Fe (mg)" />
+                <input type="number" value={ingForm.vitaminD} onChange={(e) => setIngForm({ ...ingForm, vitaminD: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Vit D (mcg)" />
+                <input type="number" value={ingForm.sodium} onChange={(e) => setIngForm({ ...ingForm, sodium: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Na (mg)" />
+              </div>
+            </details>
             <button onClick={handleAddIngredient} className="text-xs text-[#CCF472] hover:text-white transition-colors">+ Add Ingredient</button>
           </div>
 

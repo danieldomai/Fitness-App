@@ -105,6 +105,7 @@ export default function ActivePrepsCard({ onNavigate }: Props) {
       mealType: item.mealType,
       name: item.recipeName,
       macros: { ...item.macrosPerPortion },
+      ...(item.microsPerPortion ? { micros: { ...item.microsPerPortion } } : {}),
       source: 'prep',
       timestamp: new Date().toISOString(),
     };
