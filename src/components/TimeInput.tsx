@@ -64,10 +64,17 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
     setParts(newParts);
     emit(newParts);
 
-    // Auto-advance when max chars reached
-    if (digits.length >= max && index < 3) {
-      refs[index + 1].current?.focus();
-      refs[index + 1].current?.select();
+    // Auto-advance: move to next field when the value is "complete"
+    // - If max chars reached, always advance
+    // - If single digit typed and no valid two-digit number starts with it, advance early
+    //   (e.g. for max 60: typing "7" can only be 7, so advance; typing "6" could be 60, so wait)
+    if (index < 3) {
+      const num = parseInt(clamped) || 0;
+      const maxVal = maxVals[index];
+      if (digits.length >= max || (digits.length === 1 && num * 10 > maxVal)) {
+        refs[index + 1].current?.focus();
+        refs[index + 1].current?.select();
+      }
     }
   };
 
