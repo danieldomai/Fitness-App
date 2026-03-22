@@ -104,13 +104,14 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
   };
 
   const handleBlur = (index: number) => {
-    // Pad on blur for clean display (hours don't pad, others pad to 2)
+    // Clamp on blur but do NOT pad with leading zeros — padding caused
+    // maxLength to block further typing (e.g. "3" → "03" → can't type "33").
+    // The emit() function already pads the formatted output string.
     const val = parts[index];
     if (val === '') return;
     const num = clamp(parseInt(val) || 0, 0, maxVals[index]);
-    const padded = index === 0 ? String(num) : pad(num, 2);
     const newParts = [...parts] as [string, string, string, string];
-    newParts[index] = padded;
+    newParts[index] = String(num);
     setParts(newParts);
     emit(newParts);
   };
