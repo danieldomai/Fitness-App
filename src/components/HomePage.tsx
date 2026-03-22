@@ -6,9 +6,9 @@ import {
 } from 'recharts';
 import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
 import type { RaceId } from '../types';
-import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime, getTrainingTotals, formatDuration } from '../utils';
+import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime, getTrainingTotals, getRaceTotals, formatDuration } from '../utils';
 import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
-import type { WorkoutHistoryEntry } from './WorkoutLogger';
+import type { WorkoutHistoryEntry, WorkoutCategory } from './WorkoutLogger';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
 import NutritionDashboardCard from './NutritionDashboardCard';
 import ActivePrepsCard from './ActivePrepsCard';
@@ -47,6 +47,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'workout-distribution', label: 'Workout Distribution (Pie)', visible: true },
   { id: 'nutrition-card', label: 'Daily Nutrition', visible: true },
   { id: 'active-preps', label: 'Active Preps', visible: true },
+  { id: 'race-goals', label: 'Race Goals', visible: true },
   { id: 'race-progress', label: 'Race Progress', visible: true },
 ];
 
@@ -133,6 +134,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
   const [quickInputValues, setQuickInputValues] = useState<Record<string, string>>({});
   const [quickInputTimes, setQuickInputTimes] = useState<Record<string, string>>({});
   const [quickInputHr, setQuickInputHr] = useState('');
+  const [quickInputCategory, setQuickInputCategory] = useState<WorkoutCategory>('training');
   const [quickInputSaving, setQuickInputSaving] = useState(false);
   const [quickInputSuccess, setQuickInputSuccess] = useState(false);
   const [editingLayout, setEditingLayout] = useState(false);
@@ -459,6 +461,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       distances,
       times,
       hr,
+      category: quickInputCategory,
     };
     const allHist = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
     allHist.unshift(histEntry);
@@ -796,8 +799,14 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     };
   }, [weekKeys, currentWeekKey, workoutGoals]);
 
-  // Current-week training totals (for the weekly snapshot)
+  // Current-week training totals (training-only, for the weekly snapshot)
   const weeklyTotals = useMemo(() => getTrainingTotals('week'), []);
+  // Lifetime race totals
+  const raceTotals = useMemo(() => getRaceTotals(), []);
+  const raceCount = useMemo(() => {
+    const history = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+    return history.filter(e => (e.category || 'training') === 'race').length;
+  }, []);
 
   const tooltipStyle = {
     backgroundColor: 'rgba(19, 19, 19, 0.95)',
@@ -1247,6 +1256,34 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
             </div>
           )}
 
+          {/* Category toggle */}
+          {selectedRace && (
+            <div className="flex-shrink-0 self-end">
+              <div className="flex gap-1 bg-white/[0.03] rounded p-0.5">
+                <button
+                  onClick={() => setQuickInputCategory('training')}
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all ${
+                    quickInputCategory === 'training'
+                      ? 'bg-[#CCF472] text-[#0E0E0E]'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                >
+                  Training
+                </button>
+                <button
+                  onClick={() => setQuickInputCategory('race')}
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1 ${
+                    quickInputCategory === 'race'
+                      ? 'bg-amber-400 text-[#0E0E0E]'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                >
+                  🏆 Race
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Submit */}
           {selectedRace && (
             <button
@@ -1261,6 +1298,32 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       </div>
     );
   };
+
+  const renderRaceGoals = () => (
+    <div className="glass p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🏆</span>
+        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Race Goals — Lifetime</h3>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.05] text-center">
+          <div className="text-xl font-bold text-amber-400">{raceCount}</div>
+          <div className="text-[9px] text-gray-600 uppercase tracking-wider mt-0.5">Races</div>
+        </div>
+        <div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.05] text-center">
+          <div className="text-xl font-bold text-amber-400">{raceTotals.distance}</div>
+          <div className="text-[9px] text-gray-600 uppercase tracking-wider mt-0.5">Race Miles</div>
+        </div>
+        <div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.05] text-center">
+          <div className="text-xl font-bold text-amber-400">{formatDuration(raceTotals.time)}</div>
+          <div className="text-[9px] text-gray-600 uppercase tracking-wider mt-0.5">Race Time</div>
+        </div>
+      </div>
+      {raceCount === 0 && (
+        <p className="text-xs text-gray-600 text-center">Log a workout as "Race" to start tracking your lifetime race stats.</p>
+      )}
+    </div>
+  );
 
   const renderRaceProgress = () => (
     <div className="glass p-5 space-y-4">
@@ -1324,6 +1387,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     'workout-bar': renderWorkoutVolumeBar,
     'workout-distribution': renderWorkoutDistribution,
     'race-progress': renderRaceProgress,
+    'race-goals': renderRaceGoals,
     'distance-table': renderDistanceTable,
     'nutrition-card': () => <NutritionDashboardCard onNavigate={onNutrition} />,
     'active-preps': () => <ActivePrepsCard onNavigate={onNutrition} />,
@@ -1547,16 +1611,33 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
                   return `${m}:${String(sec).padStart(2, '0')}`;
                 };
 
+                const isRaceEntry = (entry.category || 'training') === 'race';
+
                 return (
-                  <div key={entry.id} className="border border-white/[0.06] rounded bg-white/[0.02] hover:bg-white/[0.03] transition-colors">
+                  <div key={entry.id} className={`border rounded hover:bg-white/[0.03] transition-colors ${
+                    isRaceEntry
+                      ? 'border-amber-400/20 bg-amber-400/[0.03]'
+                      : 'border-white/[0.06] bg-white/[0.02]'
+                  }`}>
                     {/* Header row */}
                     <div className="flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded bg-[#CCF472]/10 border border-[#CCF472]/20 flex items-center justify-center flex-shrink-0">
-                          <span className="text-[10px] font-bold text-[#CCF472]">{race?.icon || '?'}</span>
+                        <div className={`w-9 h-9 rounded flex items-center justify-center flex-shrink-0 ${
+                          isRaceEntry
+                            ? 'bg-amber-400/10 border border-amber-400/20'
+                            : 'bg-[#CCF472]/10 border border-[#CCF472]/20'
+                        }`}>
+                          <span className={`text-[10px] font-bold ${isRaceEntry ? 'text-amber-400' : 'text-[#CCF472]'}`}>
+                            {isRaceEntry ? '🏆' : (race?.icon || '?')}
+                          </span>
                         </div>
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-white truncate">{race?.name || entry.raceId}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white truncate">{race?.name || entry.raceId}</span>
+                            {isRaceEntry && (
+                              <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Race</span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-gray-600">{dateStr} at {timeStr}</div>
                         </div>
                       </div>

@@ -5,6 +5,8 @@ import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToSt
 import { insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
 
+export type WorkoutCategory = 'training' | 'race';
+
 export interface WorkoutHistoryEntry {
   id: string;
   timestamp: string;
@@ -12,6 +14,7 @@ export interface WorkoutHistoryEntry {
   distances: Record<string, number>;
   times: Record<string, number>;
   hr?: number;
+  category: WorkoutCategory;
 }
 
 interface Props {
@@ -70,6 +73,7 @@ export default function WorkoutLogger({ raceId }: Props) {
   const [hrHistory, setHrHistory] = useState<number[]>(() =>
     loadFromStorage<number[]>(hrStorageKey, [])
   );
+  const [category, setCategory] = useState<WorkoutCategory>('training');
   const [saving, setSaving] = useState(false);
 
   const avgHr = hrHistory.length > 0
@@ -189,6 +193,7 @@ export default function WorkoutLogger({ raceId }: Props) {
         distances: loggedDistances,
         times: loggedTimes,
         hr: hr > 0 ? hr : undefined,
+        category,
       });
       saveToStorage('workout-history', historyEntries);
     }
@@ -270,6 +275,33 @@ export default function WorkoutLogger({ raceId }: Props) {
             {avgHr && (
               <span className="text-xs text-gray-500">Week avg: {avgHr} bpm</span>
             )}
+          </div>
+        </div>
+
+        {/* Category toggle */}
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-600 uppercase tracking-wider">Type:</span>
+          <div className="flex gap-1 bg-white/[0.03] rounded p-0.5">
+            <button
+              onClick={() => setCategory('training')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${
+                category === 'training'
+                  ? 'bg-[#CCF472] text-[#0E0E0E]'
+                  : 'text-gray-500 hover:text-white'
+              }`}
+            >
+              Training
+            </button>
+            <button
+              onClick={() => setCategory('race')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-all flex items-center gap-1.5 ${
+                category === 'race'
+                  ? 'bg-amber-400 text-[#0E0E0E]'
+                  : 'text-gray-500 hover:text-white'
+              }`}
+            >
+              <span>🏆</span> Race
+            </button>
           </div>
         </div>
 

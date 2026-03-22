@@ -70,16 +70,18 @@ export interface TrainingTotals {
 
 /**
  * Aggregate training totals for a given period.
- * Uses workout-history entries filtered by timestamp range.
+ * Uses workout-history entries filtered by timestamp range and category.
  *
  * @param period - 'day' | 'week' | 'month' | 'year'
  * @param date - reference date (defaults to now)
  * @param raceId - optional: filter to a specific race/workout
+ * @param category - 'training' | 'race' | 'all' (defaults to 'training')
  */
 export function getTrainingTotals(
   period: 'day' | 'week' | 'month' | 'year',
   date?: Date,
   raceId?: string,
+  category: 'training' | 'race' | 'all' = 'training',
 ): TrainingTotals {
   const ref = date ? new Date(date) : new Date();
   const { start, end } = getPeriodRange(period, ref);
@@ -90,6 +92,7 @@ export function getTrainingTotals(
     raceId: string;
     distances: Record<string, number>;
     times: Record<string, number>;
+    category?: string;
   }[]>('workout-history', []);
 
   let distance = 0;
@@ -97,8 +100,43 @@ export function getTrainingTotals(
 
   for (const entry of history) {
     if (raceId && entry.raceId !== raceId) continue;
+    // Category filter: entries without a category field are treated as 'training' (legacy data)
+    if (category !== 'all') {
+      const cat = entry.category || 'training';
+      if (cat !== category) continue;
+    }
     const ts = new Date(entry.timestamp).getTime();
     if (ts < start || ts >= end) continue;
+
+    for (const val of Object.values(entry.distances)) {
+      distance += val;
+    }
+    for (const val of Object.values(entry.times)) {
+      time += val;
+    }
+  }
+
+  return { distance: Math.round(distance * 10) / 10, time };
+}
+
+/**
+ * Get lifetime race totals (all race-tagged entries, no time filter).
+ */
+export function getRaceTotals(raceId?: string): TrainingTotals {
+  const history = loadFromStorage<{
+    id: string;
+    raceId: string;
+    distances: Record<string, number>;
+    times: Record<string, number>;
+    category?: string;
+  }[]>('workout-history', []);
+
+  let distance = 0;
+  let time = 0;
+
+  for (const entry of history) {
+    if (raceId && entry.raceId !== raceId) continue;
+    if ((entry.category || 'training') !== 'race') continue;
 
     for (const val of Object.values(entry.distances)) {
       distance += val;
