@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   RadialBarChart, RadialBar,
 } from 'recharts';
-import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
+import { RACES, WEEKLY_GOALS } from '../constants';
 import type { RaceId } from '../types';
 import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime, getTrainingTotals, getRaceTotals, formatDuration } from '../utils';
 import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
@@ -261,17 +261,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
 
     // Delete from Supabase (async, fire-and-forget for UI speed)
     deleteWorkoutLogsByTimestamp(entry.timestamp, entry.raceId);
-    // Also delete synced rows for linked races
-    for (const disc of Object.keys(entry.distances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === entry.raceId && link.discipline === disc) continue;
-        deleteWorkoutLogsByTimestamp(entry.timestamp, link.raceId);
-      }
-    }
 
-    // Subtract distances
+    // Subtract distances from this race's cache only
     const distKey = `workouts-${entry.raceId}-${weekKey}`;
     const distData = loadFromStorage<Record<string, number>>(distKey, {});
     for (const [disc, val] of Object.entries(entry.distances)) {
@@ -286,30 +277,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       timeData[disc] = Math.max(0, (timeData[disc] || 0) - val);
     }
     saveToStorage(timeKey, timeData);
-
-    // Also subtract from synced races
-    for (const [disc, val] of Object.entries(entry.distances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === entry.raceId && link.discipline === disc) continue;
-        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
-        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
-        linkedData[link.discipline] = Math.max(0, (linkedData[link.discipline] || 0) - val);
-        saveToStorage(linkedKey, linkedData);
-      }
-    }
-    for (const [disc, val] of Object.entries(entry.times)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === entry.raceId && link.discipline === disc) continue;
-        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
-        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
-        linkedTimeData[link.discipline] = Math.max(0, (linkedTimeData[link.discipline] || 0) - val);
-        saveToStorage(linkedTimeKey, linkedTimeData);
-      }
-    }
 
     // Remove HR reading
     if (entry.hr) {
@@ -387,24 +354,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       rows.push({ race, discipline: 'hr', distance: hr, unit: 'bpm', logged_at: now, week_start: weekKey });
     }
 
-    // Synced rows
-    for (const [disc, val] of Object.entries(distances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === race && link.discipline === disc) continue;
-        rows.push({ race: link.raceId, discipline: link.discipline, distance: val, unit: DISC_UNITS[link.discipline] || 'sessions', logged_at: now, week_start: weekKey });
-      }
-    }
-    for (const [disc, secs] of Object.entries(times)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === race && link.discipline === disc) continue;
-        rows.push({ race: link.raceId, discipline: `${link.discipline}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
-      }
-    }
-
     await insertWorkoutLogs(rows);
 
     // Update caches for immediate UI update
@@ -427,30 +376,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       const hrs = loadFromStorage<number[]>(hrKey, []);
       hrs.push(hr);
       saveToStorage(hrKey, hrs);
-    }
-
-    // Sync caches for linked races
-    for (const [disc, val] of Object.entries(distances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === race && link.discipline === disc) continue;
-        const lk = `workouts-${link.raceId}-${weekKey}`;
-        const ld = loadFromStorage<Record<string, number>>(lk, {});
-        ld[link.discipline] = (ld[link.discipline] || 0) + val;
-        saveToStorage(lk, ld);
-      }
-    }
-    for (const [disc, secs] of Object.entries(times)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === race && link.discipline === disc) continue;
-        const lk = `workout-times-${link.raceId}-${weekKey}`;
-        const ld = loadFromStorage<Record<string, number>>(lk, {});
-        ld[link.discipline] = (ld[link.discipline] || 0) + secs;
-        saveToStorage(lk, ld);
-      }
     }
 
     // Add to history
@@ -513,34 +438,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       timeData[disc] = Math.max(0, (timeData[disc] || 0) + (newVal - oldVal));
     }
     saveToStorage(timeKey, timeData);
-
-    // Update synced races
-    for (const disc of new Set([...Object.keys(entry.distances), ...Object.keys(newDistances)])) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      const delta = (newDistances[disc] || 0) - (entry.distances[disc] || 0);
-      if (delta === 0) continue;
-      for (const link of links) {
-        if (link.raceId === entry.raceId && link.discipline === disc) continue;
-        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
-        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
-        linkedData[link.discipline] = Math.max(0, (linkedData[link.discipline] || 0) + delta);
-        saveToStorage(linkedKey, linkedData);
-      }
-    }
-    for (const disc of new Set([...Object.keys(entry.times), ...Object.keys(newTimes)])) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      const delta = (newTimes[disc] || 0) - (entry.times[disc] || 0);
-      if (delta === 0) continue;
-      for (const link of links) {
-        if (link.raceId === entry.raceId && link.discipline === disc) continue;
-        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
-        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
-        linkedTimeData[link.discipline] = Math.max(0, (linkedTimeData[link.discipline] || 0) + delta);
-        saveToStorage(linkedTimeKey, linkedTimeData);
-      }
-    }
 
     // Update HR
     if (entry.hr !== newHr) {
@@ -609,23 +506,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     const NORM: Record<string, string> = { ride: 'bike' };
     const norm = (d: string) => NORM[d] || d;
 
-    // Canonical source for shared disciplines — only read from one source to avoid double-counting synced data
-    const RACE_CANONICAL: Record<string, RaceId> = {
-      run: 'half-marathon',
-      swim: 'ironman-70.3',
-      bike: 'ironman-70.3',
-      ride: 'cycling',
-    };
-
-    const WORKOUT_CANONICAL: Record<string, RaceId> = {
-      run: 'running',
-      swim: 'swimming',
-      bike: 'cycling',
-      ride: 'cycling',
-    };
-
-    // Helper to aggregate chart data for a set of IDs with a given canonical map
-    const aggregateChartData = (ids: RaceId[], canonical: Record<string, RaceId>) => {
+    // Helper to aggregate chart data for a set of IDs (no dedup — each workout is exclusive to its goal)
+    const aggregateChartData = (ids: RaceId[]) => {
       const weeklyByDisc: Record<string, number>[] = [];
       const discsSeen = new Set<string>();
       const totalByDisc: Record<string, number> = {};
@@ -637,7 +519,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
           for (const [disc, val] of Object.entries(distances)) {
             if (val <= 0) continue;
             const key = norm(disc);
-            if (canonical[disc] && canonical[disc] !== raceId) continue;
             weekDisc[key] = (weekDisc[key] || 0) + val;
             totalByDisc[key] = (totalByDisc[key] || 0) + val;
             discsSeen.add(key);
@@ -667,10 +548,10 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       return { lineData, activeDisciplines: Array.from(discsSeen), pieData, weeklyByDisc };
     };
 
-    const raceChart = aggregateChartData(raceIds, RACE_CANONICAL);
-    const workoutChart = aggregateChartData(workoutIds, WORKOUT_CANONICAL);
+    const raceChart = aggregateChartData(raceIds);
+    const workoutChart = aggregateChartData(workoutIds);
 
-    // Combined stats using all IDs with race canonical map for dedup
+    // Combined stats — each workout counts once (no cross-sync)
     let totalWorkoutTime = 0;
     let totalDistance = 0;
     const allHrReadings: number[] = [];
@@ -692,7 +573,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
         for (const [disc, val] of Object.entries(distances)) {
           if (val <= 0) continue;
           const key = norm(disc);
-          if (RACE_CANONICAL[disc] && RACE_CANONICAL[disc] !== raceId) continue;
           weekDisc[key] = (weekDisc[key] || 0) + val;
           totalDistance += val;
           weekSessionsSet.add(key);
@@ -700,7 +580,6 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
         }
         for (const [disc, val] of Object.entries(times)) {
           if (val <= 0) continue;
-          if (RACE_CANONICAL[disc] && RACE_CANONICAL[disc] !== raceId) continue;
           weekTime += val;
         }
         weekHrs.push(...hrs);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { RaceId } from '../types';
-import { WEEKLY_GOALS, SHARED_DISCIPLINES, RACES } from '../constants';
+import { WEEKLY_GOALS } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
 import { insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
@@ -119,29 +119,10 @@ export default function WorkoutLogger({ raceId }: Props) {
       rows.push({ race: raceId, discipline: 'hr', distance: hr, unit: 'bpm', logged_at: now, week_start: weekKey });
     }
 
-    // Synced-race rows
-    for (const [disc, val] of Object.entries(loggedDistances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === raceId && link.discipline === disc) continue;
-        const info = DISCIPLINE_LABELS[link.discipline] || { unit: 'sessions' };
-        rows.push({ race: link.raceId, discipline: link.discipline, distance: val, unit: info.unit, logged_at: now, week_start: weekKey });
-      }
-    }
-    for (const [disc, secs] of Object.entries(loggedTimes)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === raceId && link.discipline === disc) continue;
-        rows.push({ race: link.raceId, discipline: `${link.discipline}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
-      }
-    }
-
     // Insert into Supabase
     await insertWorkoutLogs(rows);
 
-    // ── Update local cache (same as before, for immediate UI) ──
+    // ── Update local cache for this race only ──
 
     setTotals(updated);
     saveToStorage(storageKey, updated);
@@ -150,30 +131,6 @@ export default function WorkoutLogger({ raceId }: Props) {
     setTimeTotals(updatedTime);
     saveToStorage(timeStorageKey, updatedTime);
     setTimeInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
-
-    // Sync caches for linked races
-    for (const [disc, val] of Object.entries(loggedDistances)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === raceId && link.discipline === disc) continue;
-        const linkedKey = `workouts-${link.raceId}-${weekKey}`;
-        const linkedData = loadFromStorage<Record<string, number>>(linkedKey, {});
-        linkedData[link.discipline] = (linkedData[link.discipline] || 0) + val;
-        saveToStorage(linkedKey, linkedData);
-      }
-    }
-    for (const [disc, secs] of Object.entries(loggedTimes)) {
-      const links = SHARED_DISCIPLINES[disc];
-      if (!links) continue;
-      for (const link of links) {
-        if (link.raceId === raceId && link.discipline === disc) continue;
-        const linkedTimeKey = `workout-times-${link.raceId}-${weekKey}`;
-        const linkedTimeData = loadFromStorage<Record<string, number>>(linkedTimeKey, {});
-        linkedTimeData[link.discipline] = (linkedTimeData[link.discipline] || 0) + secs;
-        saveToStorage(linkedTimeKey, linkedTimeData);
-      }
-    }
 
     if (hr > 0) {
       const updatedHr = [...hrHistory, hr];
@@ -228,12 +185,6 @@ export default function WorkoutLogger({ raceId }: Props) {
             return (
               <div key={d} className="bg-white/[0.02] rounded px-4 py-3 border border-white/[0.05]">
                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-0.5">{info.label}</label>
-                {SHARED_DISCIPLINES[d] && (() => {
-                  const linked = SHARED_DISCIPLINES[d].filter(l => !(l.raceId === raceId && l.discipline === d));
-                  if (linked.length === 0) return null;
-                  const names = linked.map(l => RACES.find(r => r.id === l.raceId)?.icon || l.raceId);
-                  return <div className="text-[9px] text-gray-600 mb-1.5">Syncs to {names.join(', ')}</div>;
-                })()}
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex items-center gap-2">
                     <input
