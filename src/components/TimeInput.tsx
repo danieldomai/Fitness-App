@@ -34,7 +34,7 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
 
   const refs = [hRef, mRef, sRef, msRef];
   const maxChars = [3, 2, 2, 2];
-  const maxVals = [999, 60, 60, 60];
+  const maxVals = [999, 59, 59, 99];
   const labels = ['HH', 'MM', 'SS', 'MS'];
 
   const emit = useCallback((newParts: [string, string, string, string]) => {
