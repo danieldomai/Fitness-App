@@ -2083,10 +2083,29 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
         </div>
       )}
 
-      {/* Pre-chart full-width sections (distance table, quick input) */}
-      {visiblePreChart.map(section => (
-        <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
-      ))}
+      {/* Pre-chart sections — quick-input & intention-bar side by side, others full-width */}
+      {(() => {
+        const paired = visiblePreChart.filter(s => s.id === 'quick-input' || s.id === 'intention-bar');
+        const rest = visiblePreChart.filter(s => s.id !== 'quick-input' && s.id !== 'intention-bar');
+        return (
+          <>
+            {paired.length >= 2 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {paired.map(section => (
+                  <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
+                ))}
+              </div>
+            ) : (
+              paired.map(section => (
+                <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
+              ))
+            )}
+            {rest.map(section => (
+              <div key={section.id}>{SECTION_RENDERERS[section.id]?.()}</div>
+            ))}
+          </>
+        );
+      })()}
 
       {/* Charts — side by side in 2-column grid */}
       {visibleCharts.length > 0 && (
