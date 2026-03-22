@@ -15,6 +15,7 @@ export interface WorkoutHistoryEntry {
   times: Record<string, number>;
   hr?: number;
   category: WorkoutCategory;
+  goalMet?: boolean;
 }
 
 interface Props {

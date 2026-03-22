@@ -13,6 +13,14 @@ import TimeInput, { timeInputToSeconds } from './TimeInput';
 import NutritionDashboardCard from './NutritionDashboardCard';
 import ActivePrepsCard from './ActivePrepsCard';
 
+interface Intention {
+  activity: RaceId;
+  discipline: string;
+  distance: number;
+  unit: string;
+  createdAt: string;
+}
+
 interface Props {
   onSelect: (id: RaceId) => void;
   onBreakdown: () => void;
@@ -38,6 +46,7 @@ const DEFAULT_LAYOUT: DashboardSection[] = [
   { id: 'recovery', label: 'Recovery Status', visible: true },
   { id: 'quick-stats', label: 'Quick Stats', visible: true },
   { id: 'quick-input', label: 'Quick Log', visible: true },
+  { id: 'intention-bar', label: 'Intention Bar', visible: true },
   { id: 'distance-table', label: 'Weekly Distance Table', visible: true },
   { id: 'race-volume', label: 'Race Volume Trend (Line)', visible: true },
   { id: 'race-bar', label: 'Race Volume Breakdown (Bar)', visible: true },
@@ -141,6 +150,17 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     loadFromStorage<RaceId[]>('quick-log-favorites', ['running', 'cycling', 'swimming'])
   );
   const [editingQuickLogFavorites, setEditingQuickLogFavorites] = useState(false);
+  // Intention bar state
+  const [intention, setIntention] = useState<Intention | null>(() =>
+    loadFromStorage<Intention | null>('active-intention', null)
+  );
+  const [intentionActivity, setIntentionActivity] = useState<RaceId | ''>('');
+  const [intentionDistance, setIntentionDistance] = useState('');
+  const [showIntentionModal, setShowIntentionModal] = useState(false);
+  const [intentionTime, setIntentionTime] = useState('');
+  const [intentionHr, setIntentionHr] = useState('');
+  const [intentionGoalRace, setIntentionGoalRace] = useState<RaceId | ''>('');
+  const [intentionSaving, setIntentionSaving] = useState(false);
   const [editingLayout, setEditingLayout] = useState(false);
   const [layout, setLayout] = useState<DashboardSection[]>(() => {
     const saved = loadFromStorage<DashboardSection[] | null>('dashboard-layout', null);
@@ -423,6 +443,115 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     setQuickInputSaving(false);
     setQuickInputSuccess(true);
     setTimeout(() => setQuickInputSuccess(false), 2000);
+  };
+
+  // ── Intention Bar handlers ──
+
+  const handleSetIntention = () => {
+    if (!intentionActivity) return;
+    const goals = WEEKLY_GOALS[intentionActivity];
+    if (!goals) return;
+    const disc = Object.keys(goals)[0];
+    const unit = DISC_UNITS[disc] || 'sessions';
+    const dist = parseFloat(intentionDistance);
+    if (!dist || dist <= 0) return;
+
+    const newIntention: Intention = {
+      activity: intentionActivity,
+      discipline: disc,
+      distance: dist,
+      unit,
+      createdAt: new Date().toISOString(),
+    };
+    setIntention(newIntention);
+    saveToStorage('active-intention', newIntention);
+    setIntentionDistance('');
+    setIntentionActivity('');
+  };
+
+  const handleClearIntention = () => {
+    setIntention(null);
+    saveToStorage('active-intention', null);
+  };
+
+  const handleIntentionComplete = async () => {
+    if (!intention) return;
+    setIntentionSaving(true);
+
+    const goalRace = intentionGoalRace || intention.activity;
+    // Map discipline if goal differs from source activity
+    let targetDisc = intention.discipline;
+    if (goalRace !== intention.activity) {
+      const mapping = CROSS_RACE_PROGRESS.find(
+        m => m.from.race === intention.activity && m.to.race === goalRace
+      );
+      if (mapping) targetDisc = mapping.to.disc;
+    }
+
+    const now = new Date().toISOString();
+    const weekKey = getWeekKey();
+    const rows: WorkoutLogRow[] = [];
+
+    // ONE distance row, attributed to goalRace only
+    const info = DISC_UNITS[targetDisc] || 'sessions';
+    rows.push({ race: goalRace, discipline: targetDisc, distance: intention.distance, unit: info, logged_at: now, week_start: weekKey });
+
+    const secs = timeInputToSeconds(intentionTime);
+    if (secs > 0) {
+      rows.push({ race: goalRace, discipline: `${targetDisc}_time`, distance: secs, unit: 'seconds', logged_at: now, week_start: weekKey });
+    }
+
+    const hr = parseInt(intentionHr);
+    if (hr > 0) {
+      rows.push({ race: goalRace, discipline: 'hr', distance: hr, unit: 'bpm', logged_at: now, week_start: weekKey });
+    }
+
+    await insertWorkoutLogs(rows);
+
+    // Update ONLY the target race's cache — no cross-race propagation
+    const distKey = `workouts-${goalRace}-${weekKey}`;
+    const distData = loadFromStorage<Record<string, number>>(distKey, {});
+    distData[targetDisc] = (distData[targetDisc] || 0) + intention.distance;
+    saveToStorage(distKey, distData);
+
+    if (secs > 0) {
+      const timeKey = `workout-times-${goalRace}-${weekKey}`;
+      const timeData = loadFromStorage<Record<string, number>>(timeKey, {});
+      timeData[targetDisc] = (timeData[targetDisc] || 0) + secs;
+      saveToStorage(timeKey, timeData);
+    }
+
+    if (hr > 0) {
+      const hrKey = `hr-${goalRace}-${weekKey}`;
+      const hrs = loadFromStorage<number[]>(hrKey, []);
+      hrs.push(hr);
+      saveToStorage(hrKey, hrs);
+    }
+
+    // Add to history with goalMet badge
+    const histEntry: WorkoutHistoryEntry = {
+      id: `${Date.now()}-${goalRace}`,
+      timestamp: now,
+      raceId: goalRace,
+      distances: { [targetDisc]: intention.distance },
+      times: secs > 0 ? { [targetDisc]: secs } : {},
+      hr: hr > 0 ? hr : undefined,
+      category: 'training',
+      goalMet: true,
+    };
+    const allHist = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+    allHist.unshift(histEntry);
+    saveToStorage('workout-history', allHist);
+    setHistoryEntries(allHist);
+
+    // Clear intention and modal
+    setIntention(null);
+    saveToStorage('active-intention', null);
+    setShowIntentionModal(false);
+    setIntentionTime('');
+    setIntentionHr('');
+    setIntentionGoalRace('');
+    setIntentionSaving(false);
   };
 
   const saveEditEntry = (entry: WorkoutHistoryEntry) => {
@@ -1277,6 +1406,192 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     );
   };
 
+  const renderIntentionBar = () => {
+    // Build goal attribution options for the modal
+    const getGoalOptions = (activityId: RaceId): { id: RaceId; name: string }[] => {
+      const opts: { id: RaceId; name: string }[] = [];
+      const race = RACES.find(r => r.id === activityId);
+      if (race) opts.push({ id: activityId, name: race.name });
+      // Add races this discipline maps to via CROSS_RACE_PROGRESS
+      for (const { from, to } of CROSS_RACE_PROGRESS) {
+        if (from.race === activityId && !opts.find(o => o.id === to.race)) {
+          const r = RACES.find(rc => rc.id === to.race);
+          if (r) opts.push({ id: to.race as RaceId, name: r.name });
+        }
+      }
+      return opts;
+    };
+
+    return (
+      <>
+        <div className="glass p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Intention</h3>
+            {intention && (
+              <button onClick={handleClearIntention} className="text-[10px] text-gray-600 hover:text-gray-400 uppercase tracking-wider">Clear</button>
+            )}
+          </div>
+
+          {!intention ? (
+            /* ── Setting an intention ── */
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-gray-400">How far will you</span>
+                <div className="flex gap-1.5 flex-wrap">
+                  {quickLogFavorites.map(favId => {
+                    const race = RACES.find(r => r.id === favId);
+                    if (!race) return null;
+                    return (
+                      <button
+                        key={favId}
+                        onClick={() => setIntentionActivity(favId)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded transition-all ${
+                          intentionActivity === favId
+                            ? 'bg-[#CCF472] text-[#0E0E0E]'
+                            : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08] border border-white/[0.06]'
+                        }`}
+                      >
+                        {race.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-sm text-gray-400">today?</span>
+              </div>
+
+              {intentionActivity && (
+                <div className="flex items-end gap-3">
+                  <div>
+                    <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">Distance</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={intentionDistance}
+                        onChange={(e) => setIntentionDistance(e.target.value)}
+                        className="w-24 glass-input px-3 py-2 text-sm"
+                        placeholder="0"
+                      />
+                      <span className="text-xs text-gray-500">
+                        {DISC_UNITS[Object.keys(WEEKLY_GOALS[intentionActivity] || {})[0]] || 'units'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSetIntention}
+                    className="glow-btn px-5 py-2 text-sm font-medium"
+                  >
+                    Set Intention
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Active intention ── */
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => { setIntentionGoalRace(intention.activity); setShowIntentionModal(true); }}
+                className="w-6 h-6 rounded border-2 border-white/20 hover:border-[#CCF472]/50 flex items-center justify-center transition-all flex-shrink-0"
+                title="Mark as complete"
+              >
+                <span className="text-[#CCF472] opacity-0 hover:opacity-50 transition-opacity text-xs">✓</span>
+              </button>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white">
+                    {RACES.find(r => r.id === intention.activity)?.name}
+                  </span>
+                  <span className="text-sm text-[#CCF472] font-bold">
+                    {intention.distance} {intention.unit}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-600">
+                  Set {new Date(intention.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — click checkbox when done
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Completion Modal ── */}
+        {showIntentionModal && intention && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowIntentionModal(false)}>
+            <div className="glass-elevated p-6 rounded-xl w-full max-w-sm space-y-5 mx-4" onClick={e => e.stopPropagation()}>
+              <div>
+                <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Complete Intention</h4>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white">{RACES.find(r => r.id === intention.activity)?.name}</span>
+                  <span className="text-sm font-bold text-[#CCF472]">{intention.distance} {intention.unit}</span>
+                </div>
+              </div>
+
+              {/* Time */}
+              <div>
+                <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1.5">Time</label>
+                <TimeInput
+                  value={intentionTime}
+                  onChange={(formatted) => setIntentionTime(formatted)}
+                />
+              </div>
+
+              {/* HR */}
+              <div>
+                <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1.5">Heart Rate</label>
+                <input
+                  type="number"
+                  min="30"
+                  max="250"
+                  value={intentionHr}
+                  onChange={(e) => setIntentionHr(e.target.value)}
+                  className="w-24 glass-input px-3 py-2 text-sm"
+                  placeholder="bpm"
+                />
+              </div>
+
+              {/* Goal attribution */}
+              <div>
+                <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1.5">Count toward</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {getGoalOptions(intention.activity).map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setIntentionGoalRace(opt.id)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-all border ${
+                        intentionGoalRace === opt.id
+                          ? 'bg-[#CCF472]/10 text-[#CCF472] border-[#CCF472]/30'
+                          : 'bg-white/[0.03] text-gray-400 border-white/[0.06] hover:border-white/[0.12]'
+                      }`}
+                    >
+                      {opt.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={handleIntentionComplete}
+                  disabled={intentionSaving}
+                  className="glow-btn px-5 py-2.5 text-sm font-medium flex-1"
+                >
+                  {intentionSaving ? 'Saving...' : 'Log Workout'}
+                </button>
+                <button
+                  onClick={() => setShowIntentionModal(false)}
+                  className="text-xs text-gray-500 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderRaceGoals = () => (
     <div className="glass p-5 space-y-3">
       <div className="flex items-center gap-2">
@@ -1367,6 +1682,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     'race-progress': renderRaceProgress,
     'race-goals': renderRaceGoals,
     'distance-table': renderDistanceTable,
+    'intention-bar': renderIntentionBar,
     'nutrition-card': () => <NutritionDashboardCard onNavigate={onNutrition} />,
     'active-preps': () => <ActivePrepsCard onNavigate={onNutrition} />,
   };
@@ -1375,7 +1691,7 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
   // distance-table + quick-input render full-width ABOVE charts,
   // chart pairs go side-by-side, everything else is full-width below charts
   const TOP_ROW_IDS = new Set(['profile', 'recovery', 'quick-stats']);
-  const PRE_CHART_IDS = new Set(['distance-table', 'quick-input']);
+  const PRE_CHART_IDS = new Set(['distance-table', 'quick-input', 'intention-bar']);
   const CHART_IDS = new Set(['race-volume', 'race-bar', 'race-distribution', 'workout-volume', 'workout-bar', 'workout-distribution']);
 
   const visibleTopRow = layout.filter(s => TOP_ROW_IDS.has(s.id) && s.visible);
@@ -1614,6 +1930,9 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
                             <span className="text-sm font-medium text-white truncate">{race?.name || entry.raceId}</span>
                             {isRaceEntry && (
                               <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Race</span>
+                            )}
+                            {entry.goalMet && (
+                              <span className="text-[9px] font-semibold text-[#CCF472] bg-[#CCF472]/10 px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Goal Met</span>
                             )}
                           </div>
                           <div className="text-[11px] text-gray-600">{dateStr} at {timeStr}</div>
