@@ -175,6 +175,41 @@ export async function hydrateCache(): Promise<void> {
   // ── Workout logs → aggregate caches + history ──
 
   if (workoutRes.data) {
+    // ── Deduplicate old SHARED_DISCIPLINES synced rows ──
+    // Old sync code created rows for multiple races at the exact same logged_at
+    // timestamp with the same discipline. For each (logged_at, discipline) group,
+    // keep only the first row (original) and collect duplicate IDs for cleanup.
+    const seen = new Map<string, { race: string; id: number }>();
+    const duplicateIds: number[] = [];
+    const cleanRows: typeof workoutRes.data = [];
+
+    for (const row of workoutRes.data) {
+      const dedupKey = `${row.logged_at}|||${row.discipline}|||${row.distance}`;
+      if (seen.has(dedupKey)) {
+        // Same timestamp + discipline + distance but different race → synced duplicate
+        duplicateIds.push(row.id);
+      } else {
+        seen.set(dedupKey, { race: row.race, id: row.id });
+        cleanRows.push(row);
+      }
+    }
+
+    // Background cleanup: delete synced duplicates from Supabase
+    if (duplicateIds.length > 0) {
+      console.log(`[hydrateCache] Cleaning up ${duplicateIds.length} duplicate synced rows`);
+      // Delete in batches of 100 to avoid query size limits
+      for (let i = 0; i < duplicateIds.length; i += 100) {
+        const batch = duplicateIds.slice(i, i + 100);
+        supabase
+          .from('workout_logs')
+          .delete()
+          .in('id', batch)
+          .then(({ error }) => {
+            if (error) console.error('dedup cleanup', error);
+          });
+      }
+    }
+
     type Group = { distances: Record<string, number>; times: Record<string, number>; hrs: number[] };
     const byRaceWeek = new Map<string, Group>();
 
@@ -189,7 +224,7 @@ export async function hydrateCache(): Promise<void> {
     };
     const historyMap = new Map<string, HistoryGroup>();
 
-    for (const row of workoutRes.data) {
+    for (const row of cleanRows) {
       const rwKey = `${row.race}|||${row.week_start}`;
       if (!byRaceWeek.has(rwKey)) byRaceWeek.set(rwKey, { distances: {}, times: {}, hrs: [] });
       const group = byRaceWeek.get(rwKey)!;
