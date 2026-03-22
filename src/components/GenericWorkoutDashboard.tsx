@@ -2,6 +2,7 @@ import { RACES } from '../constants';
 import type { RaceId } from '../types';
 import WorkoutLogger from './WorkoutLogger';
 import ActivityCharts from './ActivityCharts';
+import TrainingHistory from './TrainingHistory';
 
 interface Props {
   raceId: RaceId;
@@ -17,6 +18,7 @@ export default function GenericWorkoutDashboard({ raceId }: Props) {
         <p className="text-sm text-gray-500 mt-1">{race?.description}</p>
       </div>
       <ActivityCharts raceId={raceId} />
+      <TrainingHistory raceId={raceId} />
       <WorkoutLogger raceId={raceId} />
     </div>
   );

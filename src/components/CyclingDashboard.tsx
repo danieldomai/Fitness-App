@@ -6,6 +6,7 @@ import LevelTimeline from './LevelTimeline';
 import WorkoutLogger from './WorkoutLogger';
 import NutritionInsights from './NutritionInsights';
 import ActivityCharts from './ActivityCharts';
+import TrainingHistory from './TrainingHistory';
 
 export default function CyclingDashboard() {
   const [speed, setSpeed] = useState(() => loadFromStorage('cycling-speed', 16));
@@ -96,6 +97,8 @@ export default function CyclingDashboard() {
       </div>
 
       <ActivityCharts raceId="cycling" />
+
+      <TrainingHistory raceId="cycling" />
 
       <WorkoutLogger raceId="cycling" />
 

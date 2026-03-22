@@ -7,6 +7,7 @@ import LevelTimeline from './LevelTimeline';
 import WorkoutLogger from './WorkoutLogger';
 import NutritionInsights from './NutritionInsights';
 import ActivityCharts from './ActivityCharts';
+import TrainingHistory from './TrainingHistory';
 
 type Discipline = 'swim' | 'bike' | 'run';
 
@@ -160,6 +161,8 @@ export default function TriathlonDashboard({ raceId }: Props) {
       <WorkoutLogger raceId={raceId} />
 
       <ActivityCharts raceId={raceId} />
+
+      <TrainingHistory raceId={raceId} />
 
       <NutritionInsights
         estimatedSeconds={totalEstimate}

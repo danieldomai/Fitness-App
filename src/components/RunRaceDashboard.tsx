@@ -8,6 +8,7 @@ import ReferenceTable from './ReferenceTable';
 import WorkoutLogger from './WorkoutLogger';
 import NutritionInsights from './NutritionInsights';
 import ActivityCharts from './ActivityCharts';
+import TrainingHistory from './TrainingHistory';
 
 interface Props {
   raceId: RaceId;
@@ -54,6 +55,8 @@ export default function RunRaceDashboard({ raceId }: Props) {
       <WorkoutLogger raceId={raceId} />
 
       <ActivityCharts raceId={raceId} />
+
+      <TrainingHistory raceId={raceId} />
 
       <NutritionInsights estimatedSeconds={goalSeconds} raceType="run" distanceMiles={distance} />
     </div>

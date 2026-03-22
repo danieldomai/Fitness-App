@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { RACES, WEEKLY_GOALS, SHARED_DISCIPLINES } from '../constants';
 import type { RaceId } from '../types';
-import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime } from '../utils';
+import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime, getTrainingTotals, formatDuration } from '../utils';
 import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry } from './WorkoutLogger';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
@@ -796,6 +796,9 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     };
   }, [weekKeys, currentWeekKey, workoutGoals]);
 
+  // Current-week training totals (for the weekly snapshot)
+  const weeklyTotals = useMemo(() => getTrainingTotals('week'), []);
+
   const tooltipStyle = {
     backgroundColor: 'rgba(19, 19, 19, 0.95)',
     border: '1px solid rgba(255,255,255,0.08)',
@@ -911,21 +914,33 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
   );
 
   const renderQuickStats = () => (
-    <div className="grid grid-cols-2 gap-3">
-      {[
-        { label: 'Total Distance', value: String(aggregatedData.totalDistance), sub: 'mi (8 weeks)' },
-        { label: 'Training Time', value: formatTime(aggregatedData.totalWorkoutTime), sub: 'total (8 weeks)' },
-        { label: 'Workouts', value: String(aggregatedData.totalSessions), sub: 'sessions logged' },
-        { label: 'Avg Heart Rate', value: aggregatedData.avgHr ? String(aggregatedData.avgHr) : '-', sub: aggregatedData.avgHr ? 'bpm average' : 'no data' },
-      ].map(s => (
-        <div key={s.label} className="glass p-4 flex flex-col justify-between">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{s.label}</span>
-          <div>
-            <div className="text-2xl font-bold text-white">{s.value}</div>
-            <div className="text-xs text-gray-600">{s.sub}</div>
-          </div>
+    <div className="space-y-3">
+      {/* Weekly Snapshot */}
+      <div className="glass px-4 py-3 flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">This Week</span>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-white font-semibold">{weeklyTotals.distance} mi</span>
+          <span className="text-gray-600">|</span>
+          <span className="text-white font-semibold">{formatDuration(weeklyTotals.time)}</span>
         </div>
-      ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: 'Total Distance', value: String(aggregatedData.totalDistance), sub: 'mi (8 weeks)' },
+          { label: 'Training Time', value: formatTime(aggregatedData.totalWorkoutTime), sub: 'total (8 weeks)' },
+          { label: 'Workouts', value: String(aggregatedData.totalSessions), sub: 'sessions logged' },
+          { label: 'Avg Heart Rate', value: aggregatedData.avgHr ? String(aggregatedData.avgHr) : '-', sub: aggregatedData.avgHr ? 'bpm average' : 'no data' },
+        ].map(s => (
+          <div key={s.label} className="glass p-4 flex flex-col justify-between">
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{s.label}</span>
+            <div>
+              <div className="text-2xl font-bold text-white">{s.value}</div>
+              <div className="text-xs text-gray-600">{s.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
