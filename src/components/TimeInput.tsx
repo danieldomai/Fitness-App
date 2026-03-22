@@ -33,8 +33,8 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
   const msRef = useRef<HTMLInputElement>(null);
 
   const refs = [hRef, mRef, sRef, msRef];
-  const maxChars = [2, 2, 2, 3];
-  const maxVals = [99, 59, 59, 999];
+  const maxChars = [3, 2, 2, 2];
+  const maxVals = [999, 60, 60, 60];
   const labels = ['HH', 'MM', 'SS', 'MS'];
 
   const emit = useCallback((newParts: [string, string, string, string]) => {
@@ -43,7 +43,7 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
     const s = parseInt(newParts[2]) || 0;
     const ms = parseInt(newParts[3]) || 0;
     const totalMs = h * 3600000 + m * 60000 + s * 1000 + ms;
-    const formatted = `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}:${pad(ms, 3)}`;
+    const formatted = `${h}:${pad(m, 2)}:${pad(s, 2)}:${pad(ms, 2)}`;
     onChange(formatted, totalMs);
   }, [onChange]);
 
@@ -97,18 +97,18 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
   };
 
   const handleBlur = (index: number) => {
-    // Pad on blur for clean display
+    // Pad on blur for clean display (hours don't pad, others pad to 2)
     const val = parts[index];
     if (val === '') return;
     const num = clamp(parseInt(val) || 0, 0, maxVals[index]);
-    const padded = pad(num, maxChars[index]);
+    const padded = index === 0 ? String(num) : pad(num, 2);
     const newParts = [...parts] as [string, string, string, string];
     newParts[index] = padded;
     setParts(newParts);
     emit(newParts);
   };
 
-  const inputSize = compact ? 'w-10 px-1.5 py-1 text-xs' : 'w-12 px-2 py-1.5 text-sm';
+  const inputSize = compact ? 'w-10 px-1.5 py-1 text-xs' : 'w-14 px-2 py-1.5 text-sm';
   const separatorSize = compact ? 'text-xs' : 'text-sm';
   const labelSize = compact ? 'text-[8px]' : 'text-[9px]';
 
@@ -158,12 +158,12 @@ export function timeInputToSeconds(formatted: string): number {
 }
 
 /**
- * Convert total seconds to "HH:MM:SS:000" formatted string (for initializing from existing data).
+ * Convert total seconds to "H:MM:SS:00" formatted string (for initializing from existing data).
  */
 export function secondsToTimeInput(totalSeconds: number): string {
   if (totalSeconds <= 0) return '';
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}:000`;
+  return `${h}:${pad(m, 2)}:${pad(s, 2)}:00`;
 }
