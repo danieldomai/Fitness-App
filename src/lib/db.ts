@@ -75,7 +75,7 @@ const GOAL_KEY_RE = /^goal-(.+)$/;
 const SETTING_KEYS = new Set([
   'user-profile', 'dashboard-layout', 'active-races', 'active-race',
   'hyrox-gender', 'hyrox-division', 'hyrox-station-goal-inputs',
-  'nav-favorites',
+  'nav-favorites', 'quick-log-favorites',
   'nutrition-calorie-goal', 'nutrition-macro-goals', 'nutrition-daily-log',
   'nutrition-recipes', 'nutrition-meal-prep', 'nutrition-pantry', 'nutrition-shopping-list',
   'nutrition-buy-history',

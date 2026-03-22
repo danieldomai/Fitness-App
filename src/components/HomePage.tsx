@@ -137,6 +137,10 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
   const [quickInputCategory, setQuickInputCategory] = useState<WorkoutCategory>('training');
   const [quickInputSaving, setQuickInputSaving] = useState(false);
   const [quickInputSuccess, setQuickInputSuccess] = useState(false);
+  const [quickLogFavorites, setQuickLogFavorites] = useState<RaceId[]>(() =>
+    loadFromStorage<RaceId[]>('quick-log-favorites', ['running', 'cycling', 'swimming'])
+  );
+  const [editingQuickLogFavorites, setEditingQuickLogFavorites] = useState(false);
   const [editingLayout, setEditingLayout] = useState(false);
   const [layout, setLayout] = useState<DashboardSection[]>(() => {
     const saved = loadFromStorage<DashboardSection[] | null>('dashboard-layout', null);
@@ -1083,71 +1087,143 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     );
   };
 
+  const handleSelectQuickRace = (id: RaceId) => {
+    setQuickInputRace(id === quickInputRace ? '' : id);
+    setQuickInputValues({});
+    setQuickInputTimes({});
+    setQuickInputHr('');
+  };
+
+  const toggleQuickLogFavorite = (id: RaceId) => {
+    const next = quickLogFavorites.includes(id)
+      ? quickLogFavorites.filter(f => f !== id)
+      : [...quickLogFavorites, id];
+    setQuickLogFavorites(next);
+    saveToStorage('quick-log-favorites', next);
+  };
+
   const renderQuickInput = () => {
     const selectedRace = quickInputRace ? RACES.find(r => r.id === quickInputRace) : null;
     const disciplines = quickInputRace ? Object.keys(WEEKLY_GOALS[quickInputRace as RaceId] || {}) : [];
 
     return (
       <div className="glass p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Quick Log</h3>
-          {quickInputSuccess && (
-            <span className="text-[10px] font-semibold text-[#CCF472] uppercase tracking-wider animate-pulse">Saved!</span>
-          )}
-        </div>
+        {/* Header row: title + favorite activity buttons + edit toggle */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mr-1">Quick Log</h3>
 
-        <div className="flex flex-wrap items-end gap-3">
-          {/* Race selector */}
-          <div className="flex-shrink-0">
-            <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">Activity</label>
-            <select
-              value={quickInputRace}
-              onChange={(e) => { setQuickInputRace(e.target.value as RaceId | ''); setQuickInputValues({}); setQuickInputTimes({}); setQuickInputHr(''); }}
-              className="glass-input px-3 py-2 text-sm bg-transparent min-w-[160px]"
-            >
-              <option value="" className="bg-[#0E0E0E]">Select...</option>
-              {RACES.filter(r => r.category === 'race').length > 0 && (
-                <optgroup label="Races">
-                  {RACES.filter(r => r.category === 'race').map(r => (
-                    <option key={r.id} value={r.id} className="bg-[#0E0E0E]">{r.name}</option>
+          {/* Activity shortcut buttons */}
+          <div className="flex gap-1.5 flex-wrap flex-1">
+            {quickLogFavorites.map(favId => {
+              const race = RACES.find(r => r.id === favId);
+              if (!race) return null;
+              const isSelected = quickInputRace === favId;
+              return (
+                <button
+                  key={favId}
+                  onClick={() => handleSelectQuickRace(favId)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-all ${
+                    isSelected
+                      ? 'bg-[#CCF472] text-[#0E0E0E]'
+                      : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/[0.06]'
+                  }`}
+                >
+                  {race.icon && <span className="mr-1 opacity-70">{race.icon}</span>}
+                  {race.name}
+                </button>
+              );
+            })}
+
+            {/* More dropdown for non-favorited activities */}
+            {!editingQuickLogFavorites && (
+              <div className="relative group">
+                <button className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-white bg-white/[0.03] rounded border border-white/[0.06] transition-all">
+                  +
+                </button>
+                <div className="absolute top-full left-0 mt-1 bg-[#1a1a1a] border border-white/[0.1] rounded-lg shadow-xl z-50 min-w-[160px] py-1 hidden group-hover:block">
+                  {RACES.filter(r => !quickLogFavorites.includes(r.id)).map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => handleSelectQuickRace(r.id)}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-white/[0.06] transition-colors ${
+                        quickInputRace === r.id ? 'text-[#CCF472]' : 'text-gray-400'
+                      }`}
+                    >
+                      {r.name}
+                    </button>
                   ))}
-                </optgroup>
-              )}
-              <optgroup label="Workouts">
-                {RACES.filter(r => r.category === 'workout').map(r => (
-                  <option key={r.id} value={r.id} className="bg-[#0E0E0E]">{r.name}</option>
-                ))}
-              </optgroup>
-            </select>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Discipline inputs */}
-          {selectedRace && disciplines.map(disc => (
-            <div key={disc} className="flex-shrink-0">
-              <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">
-                {DISCIPLINE_LABELS[disc] || disc} ({DISC_UNITS[disc] || 'sessions'})
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={quickInputValues[disc] || ''}
-                  onChange={(e) => setQuickInputValues({ ...quickInputValues, [disc]: e.target.value })}
-                  className="w-20 glass-input px-2 py-2 text-sm"
-                  placeholder="0"
-                />
-                <TimeInput
-                  compact
-                  value={quickInputTimes[disc] || ''}
-                  onChange={(formatted) => setQuickInputTimes({ ...quickInputTimes, [disc]: formatted })}
-                />
-              </div>
-            </div>
-          ))}
+          {/* Edit / success indicators */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {quickInputSuccess && (
+              <span className="text-[10px] font-semibold text-[#CCF472] uppercase tracking-wider animate-pulse">Saved!</span>
+            )}
+            <button
+              onClick={() => setEditingQuickLogFavorites(!editingQuickLogFavorites)}
+              className={`text-[10px] uppercase tracking-wider transition-colors ${
+                editingQuickLogFavorites ? 'text-[#CCF472]' : 'text-gray-600 hover:text-gray-400'
+              }`}
+            >
+              {editingQuickLogFavorites ? 'Done' : 'Edit'}
+            </button>
+          </div>
+        </div>
 
-          {/* HR input */}
-          {selectedRace && (
+        {/* Edit mode: toggle which activities show as quick buttons */}
+        {editingQuickLogFavorites && (
+          <div className="flex flex-wrap gap-1.5 p-3 bg-white/[0.02] rounded border border-white/[0.06]">
+            <span className="text-[9px] text-gray-600 uppercase tracking-wider w-full mb-1">Toggle activities:</span>
+            {RACES.map(r => {
+              const isFav = quickLogFavorites.includes(r.id);
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => toggleQuickLogFavorite(r.id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded transition-all border ${
+                    isFav
+                      ? 'bg-[#CCF472]/10 text-[#CCF472] border-[#CCF472]/30'
+                      : 'bg-white/[0.02] text-gray-500 border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                >
+                  {r.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Discipline inputs — shown when an activity is selected */}
+        {selectedRace && (
+          <div className="flex flex-wrap items-end gap-3">
+            {disciplines.map(disc => (
+              <div key={disc} className="flex-shrink-0">
+                <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">
+                  {DISCIPLINE_LABELS[disc] || disc} ({DISC_UNITS[disc] || 'sessions'})
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={quickInputValues[disc] || ''}
+                    onChange={(e) => setQuickInputValues({ ...quickInputValues, [disc]: e.target.value })}
+                    className="w-20 glass-input px-2 py-2 text-sm"
+                    placeholder="0"
+                  />
+                  <TimeInput
+                    compact
+                    value={quickInputTimes[disc] || ''}
+                    onChange={(formatted) => setQuickInputTimes({ ...quickInputTimes, [disc]: formatted })}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* HR input */}
             <div className="flex-shrink-0">
               <label className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1">HR</label>
               <input
@@ -1160,10 +1236,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
                 placeholder="bpm"
               />
             </div>
-          )}
 
-          {/* Category toggle */}
-          {selectedRace && (
+            {/* Category toggle */}
             <div className="flex-shrink-0 self-end">
               <div className="flex gap-1 bg-white/[0.03] rounded p-0.5">
                 <button
@@ -1188,10 +1262,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
                 </button>
               </div>
             </div>
-          )}
 
-          {/* Submit */}
-          {selectedRace && (
+            {/* Submit */}
             <button
               onClick={handleQuickLog}
               disabled={quickInputSaving}
@@ -1199,8 +1271,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
             >
               {quickInputSaving ? 'Saving...' : 'Log'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   };
