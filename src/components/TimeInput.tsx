@@ -26,6 +26,9 @@ function parseFormatted(s: string): [string, string, string, string] {
 
 export default function TimeInput({ onChange, value = '', compact = false }: Props) {
   const [parts, setParts] = useState<[string, string, string, string]>(() => parseFormatted(value));
+  // Keep a ref in sync so blur always reads the LATEST value
+  // (React batches setParts, so parts can be stale when blur fires from auto-advance)
+  const partsRef = useRef(parts);
 
   const hRef = useRef<HTMLInputElement>(null);
   const mRef = useRef<HTMLInputElement>(null);
@@ -36,6 +39,11 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
   const maxChars = [3, 2, 2, 2];
   const maxVals = [999, 59, 59, 99];
   const labels = ['HH', 'MM', 'SS', 'MS'];
+
+  const updateParts = (newParts: [string, string, string, string]) => {
+    partsRef.current = newParts;
+    setParts(newParts);
+  };
 
   const emit = useCallback((newParts: [string, string, string, string]) => {
     const h = parseInt(newParts[0]) || 0;
@@ -59,15 +67,15 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
       clamped = String(num);
     }
 
-    const newParts = [...parts] as [string, string, string, string];
+    const newParts = [...partsRef.current] as [string, string, string, string];
     newParts[index] = clamped;
-    setParts(newParts);
+    updateParts(newParts);
     emit(newParts);
 
     // Auto-advance: move to next field when the value is "complete"
     // - If max chars reached, always advance
     // - If single digit typed and no valid two-digit number starts with it, advance early
-    //   (e.g. for max 60: typing "7" can only be 7, so advance; typing "6" could be 60, so wait)
+    //   (e.g. for max 59: typing "6" can only be 6, so advance; typing "5" could be 50-59, so wait)
     if (index < 3) {
       const num = parseInt(clamped) || 0;
       const maxVal = maxVals[index];
@@ -80,7 +88,7 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     // Backspace on empty → go back
-    if (e.key === 'Backspace' && parts[index] === '' && index > 0) {
+    if (e.key === 'Backspace' && partsRef.current[index] === '' && index > 0) {
       e.preventDefault();
       refs[index - 1].current?.focus();
     }
@@ -104,15 +112,13 @@ export default function TimeInput({ onChange, value = '', compact = false }: Pro
   };
 
   const handleBlur = (index: number) => {
-    // Clamp on blur but do NOT pad with leading zeros — padding caused
-    // maxLength to block further typing (e.g. "3" → "03" → can't type "33").
-    // The emit() function already pads the formatted output string.
-    const val = parts[index];
+    // Read from ref (not state) to get the latest value even during batched updates
+    const val = partsRef.current[index];
     if (val === '') return;
     const num = clamp(parseInt(val) || 0, 0, maxVals[index]);
-    const newParts = [...parts] as [string, string, string, string];
+    const newParts = [...partsRef.current] as [string, string, string, string];
     newParts[index] = String(num);
-    setParts(newParts);
+    updateParts(newParts);
     emit(newParts);
   };
 
