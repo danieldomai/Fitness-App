@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { RaceId } from '../types';
 import { WEEKLY_GOALS } from '../constants';
 import { getWeekKey, getPastWeekKeys, formatWeekLabel, loadFromStorage, saveToStorage } from '../utils';
-import { insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
+import { insertWorkoutLogs, CROSS_RACE_PROGRESS, type WorkoutLogRow } from '../lib/db';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
 
 export type WorkoutCategory = 'training' | 'race';
@@ -122,7 +122,7 @@ export default function WorkoutLogger({ raceId }: Props) {
     // Insert into Supabase
     await insertWorkoutLogs(rows);
 
-    // ── Update local cache for this race only ──
+    // ── Update local cache for this race ──
 
     setTotals(updated);
     saveToStorage(storageKey, updated);
@@ -131,6 +131,25 @@ export default function WorkoutLogger({ raceId }: Props) {
     setTimeTotals(updatedTime);
     saveToStorage(timeStorageKey, updatedTime);
     setTimeInputs(Object.fromEntries(disciplines.map((d) => [d, ''])));
+
+    // ── Cross-race progress: update related race caches ──
+    for (const { from, to } of CROSS_RACE_PROGRESS) {
+      if (from.race !== raceId) continue;
+      const dist = loggedDistances[from.disc] || 0;
+      const time = loggedTimes[from.disc] || 0;
+      if (dist === 0 && time === 0) continue;
+
+      const targetDistKey = `workouts-${to.race}-${weekKey}`;
+      const targetTimeKey = `workout-times-${to.race}-${weekKey}`;
+      const targetDists = loadFromStorage<Record<string, number>>(targetDistKey, {});
+      const targetTimes = loadFromStorage<Record<string, number>>(targetTimeKey, {});
+
+      if (dist > 0) targetDists[to.disc] = (targetDists[to.disc] || 0) + dist;
+      if (time > 0) targetTimes[to.disc] = (targetTimes[to.disc] || 0) + time;
+
+      saveToStorage(targetDistKey, targetDists);
+      saveToStorage(targetTimeKey, targetTimes);
+    }
 
     if (hr > 0) {
       const updatedHr = [...hrHistory, hr];

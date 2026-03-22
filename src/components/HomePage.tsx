@@ -7,7 +7,7 @@ import {
 import { RACES, WEEKLY_GOALS } from '../constants';
 import type { RaceId } from '../types';
 import { getPastWeekKeys, getWeekKey, loadFromStorage, saveToStorage, formatTime, getTrainingTotals, getRaceTotals, formatDuration } from '../utils';
-import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, type WorkoutLogRow } from '../lib/db';
+import { deleteWorkoutLogsByTimestamp, updateWorkoutLogsByTimestamp, insertWorkoutLogs, CROSS_RACE_PROGRESS, type WorkoutLogRow } from '../lib/db';
 import type { WorkoutHistoryEntry, WorkoutCategory } from './WorkoutLogger';
 import TimeInput, { timeInputToSeconds } from './TimeInput';
 import NutritionDashboardCard from './NutritionDashboardCard';
@@ -378,6 +378,25 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
       saveToStorage(hrKey, hrs);
     }
 
+    // Cross-race progress: update related race caches
+    for (const { from, to } of CROSS_RACE_PROGRESS) {
+      if (from.race !== race) continue;
+      const dist = distances[from.disc] || 0;
+      const time = times[from.disc] || 0;
+      if (dist === 0 && time === 0) continue;
+
+      const targetDistKey = `workouts-${to.race}-${weekKey}`;
+      const targetTimeKey = `workout-times-${to.race}-${weekKey}`;
+      const targetDists = loadFromStorage<Record<string, number>>(targetDistKey, {});
+      const targetTimes = loadFromStorage<Record<string, number>>(targetTimeKey, {});
+
+      if (dist > 0) targetDists[to.disc] = (targetDists[to.disc] || 0) + dist;
+      if (time > 0) targetTimes[to.disc] = (targetTimes[to.disc] || 0) + time;
+
+      saveToStorage(targetDistKey, targetDists);
+      saveToStorage(targetTimeKey, targetTimes);
+    }
+
     // Add to history
     const histEntry: WorkoutHistoryEntry = {
       id: `${Date.now()}-${race}`,
@@ -551,7 +570,8 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     const raceChart = aggregateChartData(raceIds);
     const workoutChart = aggregateChartData(workoutIds);
 
-    // Combined stats — each workout counts once (no cross-sync)
+    // Combined stats — aggregate from deduped workout-history to avoid
+    // double-counting from cross-race progress caches.
     let totalWorkoutTime = 0;
     let totalDistance = 0;
     const allHrReadings: number[] = [];
@@ -559,18 +579,25 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
     let lastWorkoutDate = '';
     const combinedWeeklyByDisc: Record<string, number>[] = [];
 
-    for (const wk of weekKeys) {
+    // Build a set of week start timestamps for filtering history entries
+    const weekRanges = weekKeys.map(wk => {
+      const start = new Date(wk + 'T00:00:00').getTime();
+      return { wk, start, end: start + 7 * 86400000 };
+    });
+
+    const allHistory = loadFromStorage<WorkoutHistoryEntry[]>('workout-history', []);
+
+    for (const { wk, start, end } of weekRanges) {
       let weekTime = 0;
       const weekHrs: number[] = [];
       const weekDisc: Record<string, number> = {};
       const weekSessionsSet = new Set<string>();
 
-      for (const raceId of allIds) {
-        const distances = loadFromStorage<Record<string, number>>(`workouts-${raceId}-${wk}`, {});
-        const times = loadFromStorage<Record<string, number>>(`workout-times-${raceId}-${wk}`, {});
-        const hrs = loadFromStorage<number[]>(`hr-${raceId}-${wk}`, []);
+      for (const entry of allHistory) {
+        const ts = new Date(entry.timestamp).getTime();
+        if (ts < start || ts >= end) continue;
 
-        for (const [disc, val] of Object.entries(distances)) {
+        for (const [disc, val] of Object.entries(entry.distances)) {
           if (val <= 0) continue;
           const key = norm(disc);
           weekDisc[key] = (weekDisc[key] || 0) + val;
@@ -578,11 +605,11 @@ export default function HomePage({ onSelect, onBreakdown, onNutrition }: Props) 
           weekSessionsSet.add(key);
           if (!lastWorkoutDate || wk > lastWorkoutDate) lastWorkoutDate = wk;
         }
-        for (const [disc, val] of Object.entries(times)) {
+        for (const val of Object.values(entry.times)) {
           if (val <= 0) continue;
           weekTime += val;
         }
-        weekHrs.push(...hrs);
+        if (entry.hr) weekHrs.push(entry.hr);
       }
 
       totalWorkoutTime += weekTime;

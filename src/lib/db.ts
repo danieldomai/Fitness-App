@@ -27,6 +27,34 @@
 import { supabase } from './supabase';
 import { HYROX_STATIONS } from '../constants';
 
+// ── Cross-race discipline mapping for progress tracking ─────────────────────
+// When a workout is logged for one race, its disciplines can also count
+// toward progress in related races (e.g. cycling "ride" → ironman "bike").
+// This is used during hydration and live logging to update progress caches.
+export const CROSS_RACE_PROGRESS: { from: { race: string; disc: string }; to: { race: string; disc: string } }[] = [
+  // Cycling ↔ Ironman bike
+  { from: { race: 'cycling', disc: 'ride' }, to: { race: 'ironman-70.3', disc: 'bike' } },
+  { from: { race: 'cycling', disc: 'ride' }, to: { race: 'ironman-140.6', disc: 'bike' } },
+  { from: { race: 'ironman-70.3', disc: 'bike' }, to: { race: 'cycling', disc: 'ride' } },
+  { from: { race: 'ironman-140.6', disc: 'bike' }, to: { race: 'cycling', disc: 'ride' } },
+  // Running ↔ races with run
+  { from: { race: 'running', disc: 'run' }, to: { race: 'half-marathon', disc: 'run' } },
+  { from: { race: 'running', disc: 'run' }, to: { race: 'marathon', disc: 'run' } },
+  { from: { race: 'running', disc: 'run' }, to: { race: 'hyrox', disc: 'run' } },
+  { from: { race: 'running', disc: 'run' }, to: { race: 'ironman-70.3', disc: 'run' } },
+  { from: { race: 'running', disc: 'run' }, to: { race: 'ironman-140.6', disc: 'run' } },
+  { from: { race: 'half-marathon', disc: 'run' }, to: { race: 'running', disc: 'run' } },
+  { from: { race: 'marathon', disc: 'run' }, to: { race: 'running', disc: 'run' } },
+  { from: { race: 'hyrox', disc: 'run' }, to: { race: 'running', disc: 'run' } },
+  { from: { race: 'ironman-70.3', disc: 'run' }, to: { race: 'running', disc: 'run' } },
+  { from: { race: 'ironman-140.6', disc: 'run' }, to: { race: 'running', disc: 'run' } },
+  // Swimming ↔ Ironman swim
+  { from: { race: 'swimming', disc: 'swim' }, to: { race: 'ironman-70.3', disc: 'swim' } },
+  { from: { race: 'swimming', disc: 'swim' }, to: { race: 'ironman-140.6', disc: 'swim' } },
+  { from: { race: 'ironman-70.3', disc: 'swim' }, to: { race: 'swimming', disc: 'swim' } },
+  { from: { race: 'ironman-140.6', disc: 'swim' }, to: { race: 'swimming', disc: 'swim' } },
+];
+
 // ── In-memory cache ──────────────────────────────────────────────────────────
 
 const store = new Map<string, unknown>();
@@ -177,20 +205,26 @@ export async function hydrateCache(): Promise<void> {
   if (workoutRes.data) {
     // ── Deduplicate old SHARED_DISCIPLINES synced rows ──
     // Old sync code created rows for multiple races at the exact same logged_at
-    // timestamp with the same discipline. For each (logged_at, discipline) group,
-    // keep only the first row (original) and collect duplicate IDs for cleanup.
-    const seen = new Map<string, { race: string; id: number }>();
+    // timestamp but with different races (and sometimes renamed disciplines,
+    // e.g. ride→bike). Group by logged_at: if a timestamp has rows from
+    // multiple races, keep only the first race and discard the rest.
+    const raceByTimestamp = new Map<string, string>(); // logged_at → first race seen
     const duplicateIds: number[] = [];
     const cleanRows: typeof workoutRes.data = [];
 
     for (const row of workoutRes.data) {
-      const dedupKey = `${row.logged_at}|||${row.discipline}|||${row.distance}`;
-      if (seen.has(dedupKey)) {
-        // Same timestamp + discipline + distance but different race → synced duplicate
-        duplicateIds.push(row.id);
-      } else {
-        seen.set(dedupKey, { race: row.race, id: row.id });
+      const ts = row.logged_at;
+      const existingRace = raceByTimestamp.get(ts);
+      if (existingRace === undefined) {
+        // First row at this timestamp — adopt its race
+        raceByTimestamp.set(ts, row.race);
         cleanRows.push(row);
+      } else if (existingRace === row.race) {
+        // Same race at same timestamp — legitimate (multiple disciplines in one log)
+        cleanRows.push(row);
+      } else {
+        // Different race at same timestamp → synced duplicate, discard
+        duplicateIds.push(row.id);
       }
     }
 
@@ -261,7 +295,45 @@ export async function hydrateCache(): Promise<void> {
       }
     }
 
-    // Populate aggregate caches
+    // ── Cross-race progress: merge shared disciplines into byRaceWeek ──
+    // e.g. cycling "ride" workouts count toward ironman "bike" progress.
+    // Snapshot source values BEFORE merging to prevent bidirectional feedback loops.
+    const weekKeys = new Set<string>();
+    for (const rwKey of byRaceWeek.keys()) {
+      weekKeys.add(rwKey.split('|||')[1]);
+    }
+
+    // Snapshot: capture original distances/times before any cross-race merges
+    const origSnapshot = new Map<string, { distances: Record<string, number>; times: Record<string, number> }>();
+    for (const [key, data] of byRaceWeek) {
+      origSnapshot.set(key, {
+        distances: { ...data.distances },
+        times: { ...data.times },
+      });
+    }
+
+    for (const week of weekKeys) {
+      for (const { from, to } of CROSS_RACE_PROGRESS) {
+        const srcKey = `${from.race}|||${week}`;
+        const src = origSnapshot.get(srcKey);
+        if (!src) continue;
+
+        const srcDist = src.distances[from.disc] || 0;
+        const srcTime = src.times[from.disc] || 0;
+        if (srcDist === 0 && srcTime === 0) continue;
+
+        // Ensure target exists in byRaceWeek
+        const targetKey = `${to.race}|||${week}`;
+        if (!byRaceWeek.has(targetKey)) {
+          byRaceWeek.set(targetKey, { distances: {}, times: {}, hrs: [] });
+        }
+        const target = byRaceWeek.get(targetKey)!;
+        if (srcDist > 0) target.distances[to.disc] = (target.distances[to.disc] || 0) + srcDist;
+        if (srcTime > 0) target.times[to.disc] = (target.times[to.disc] || 0) + srcTime;
+      }
+    }
+
+    // Populate aggregate caches (includes cross-race merged data)
     for (const [rwKey, data] of byRaceWeek) {
       const [race, weekStart] = rwKey.split('|||');
       store.set(`workouts-${race}-${weekStart}`, data.distances);
