@@ -117,6 +117,16 @@ export default function NutritionPage() {
   const [newIngredients, setNewIngredients] = useState<Ingredient[]>([]);
   const [ingForm, setIngForm] = useState({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
 
+  // ── Edit recipe state ──
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  const [editRecipe, setEditRecipe] = useState({ name: '', mealType: 'lunch' as Recipe['mealType'], batchSize: '5' });
+  const [editIngredients, setEditIngredients] = useState<Ingredient[]>([]);
+  const [editIngForm, setEditIngForm] = useState({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
+
+  // ── Edit prep portions state ──
+  const [editingPrepIdx, setEditingPrepIdx] = useState<number | null>(null);
+  const [editPrepCount, setEditPrepCount] = useState('');
+
   // ── New pantry item state ──
   const [newPantryItem, setNewPantryItem] = useState({ name: '', amount: '', unit: 'g', category: 'other' });
 
@@ -473,6 +483,82 @@ export default function NutritionPage() {
     setShowAddPantry(false);
   }
 
+  // ── Start editing a recipe ──
+  function startEditRecipe(recipe: Recipe) {
+    setEditingRecipeId(recipe.id);
+    setEditRecipe({ name: recipe.name, mealType: recipe.mealType, batchSize: String(recipe.batchSize) });
+    setEditIngredients([...recipe.ingredients]);
+    setEditIngForm({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
+  }
+
+  // ── Save edited recipe ──
+  function handleSaveEditRecipe() {
+    if (!editingRecipeId) return;
+    const updated = recipes.map(r => {
+      if (r.id !== editingRecipeId) return r;
+      return { ...r, name: editRecipe.name || r.name, mealType: editRecipe.mealType, batchSize: parseInt(editRecipe.batchSize) || r.batchSize, ingredients: [...editIngredients] };
+    });
+    saveRecipes(updated);
+
+    // Also update any prep items that reference this recipe
+    const recipe = recipes.find(r => r.id === editingRecipeId);
+    if (recipe) {
+      const updatedRecipe = updated.find(r => r.id === editingRecipeId)!;
+      const perPortion = recipePerPortionMacros(updatedRecipe);
+      const microsPer = recipePerPortionMicros(updatedRecipe);
+      const hasMicros = microsPer.potassium + microsPer.calcium + microsPer.iron + microsPer.vitaminD + microsPer.sodium > 0;
+      const updatedItems = mealPrep.items.map(item => {
+        if (item.recipeId !== editingRecipeId) return item;
+        return { ...item, recipeName: updatedRecipe.name, mealType: updatedRecipe.mealType, macrosPerPortion: perPortion, ...(hasMicros ? { microsPerPortion: microsPer } : {}) };
+      });
+      saveMealPrep({ items: updatedItems });
+    }
+
+    setEditingRecipeId(null);
+  }
+
+  // ── Add ingredient to editing recipe ──
+  function handleAddEditIngredient() {
+    const hasMicros = editIngForm.potassium || editIngForm.calcium || editIngForm.iron || editIngForm.vitaminD || editIngForm.sodium;
+    const ing: Ingredient = {
+      id: uid(),
+      name: editIngForm.name || 'Ingredient',
+      amount: parseFloat(editIngForm.amount) || 0,
+      unit: editIngForm.unit,
+      macros: {
+        calories: parseInt(editIngForm.calories) || 0,
+        protein: parseFloat(editIngForm.protein) || 0,
+        carbs: parseFloat(editIngForm.carbs) || 0,
+        fat: parseFloat(editIngForm.fat) || 0,
+      },
+      ...(hasMicros ? {
+        micros: {
+          potassium: parseFloat(editIngForm.potassium) || 0,
+          calcium: parseFloat(editIngForm.calcium) || 0,
+          iron: parseFloat(editIngForm.iron) || 0,
+          vitaminD: parseFloat(editIngForm.vitaminD) || 0,
+          sodium: parseFloat(editIngForm.sodium) || 0,
+        },
+      } : {}),
+    };
+    setEditIngredients([...editIngredients, ing]);
+    setEditIngForm({ name: '', amount: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', potassium: '', calcium: '', iron: '', vitaminD: '', sodium: '' });
+  }
+
+  // ── Edit prep portion count ──
+  function handleSavePrepCount(itemIdx: number) {
+    const newCount = parseInt(editPrepCount);
+    if (isNaN(newCount) || newCount < 0) return;
+    const updatedItems = [...mealPrep.items];
+    if (newCount === 0) {
+      updatedItems.splice(itemIdx, 1);
+    } else {
+      updatedItems[itemIdx] = { ...updatedItems[itemIdx], count: newCount };
+    }
+    saveMealPrep({ items: updatedItems });
+    setEditingPrepIdx(null);
+  }
+
   // ── Update calorie goal ──
   function updateCalorieGoal(val: number) {
     setCalorieGoal(val);
@@ -651,12 +737,36 @@ export default function NutritionPage() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => consumePrepItem(realIdx)}
-                      className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-[#CCF472] bg-[#CCF472]/10 hover:bg-[#CCF472]/25 border border-[#CCF472]/20 hover:border-[#CCF472]/40 transition-all"
-                    >
-                      Log
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {editingPrepIdx === realIdx ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number" min="0"
+                            value={editPrepCount}
+                            onChange={e => setEditPrepCount(e.target.value)}
+                            className="w-14 glass-input px-2 py-1 text-xs text-center"
+                            autoFocus
+                            onKeyDown={e => { if (e.key === 'Enter') handleSavePrepCount(realIdx); if (e.key === 'Escape') setEditingPrepIdx(null); }}
+                          />
+                          <button onClick={() => handleSavePrepCount(realIdx)} className="text-[10px] text-[#CCF472] hover:text-white transition-colors font-bold">✓</button>
+                          <button onClick={() => setEditingPrepIdx(null)} className="text-[10px] text-gray-500 hover:text-white transition-colors">✕</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingPrepIdx(realIdx); setEditPrepCount(String(item.count)); }}
+                          className="text-[10px] text-gray-600 hover:text-blue-400 transition-colors"
+                          title="Edit portions"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        onClick={() => consumePrepItem(realIdx)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-[#CCF472] bg-[#CCF472]/10 hover:bg-[#CCF472]/25 border border-[#CCF472]/20 hover:border-[#CCF472]/40 transition-all"
+                      >
+                        Log
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1077,6 +1187,12 @@ export default function NutritionPage() {
                     Details
                   </button>
                   <button
+                    onClick={() => startEditRecipe(recipe)}
+                    className="text-xs text-gray-500 hover:text-blue-400 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
                     onClick={() => handleCookBatch(recipe, recipe.batchSize)}
                     className="glow-btn px-3 py-1.5 text-[10px]"
                   >
@@ -1104,6 +1220,90 @@ export default function NutritionPage() {
           );
         })}
       </div>
+
+      {/* Edit Recipe Modal */}
+      {editingRecipeId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditingRecipeId(null)}>
+          <div className="bg-[#1A1A1A] border border-white/[0.1] rounded-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Edit Recipe</h3>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Recipe Name</label>
+                <input value={editRecipe.name} onChange={e => setEditRecipe({ ...editRecipe, name: e.target.value })} className="w-full glass-input px-2 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Batch Size</label>
+                <input type="number" min="1" value={editRecipe.batchSize} onChange={e => setEditRecipe({ ...editRecipe, batchSize: e.target.value })} className="w-full glass-input px-2 py-1.5 text-sm text-center" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-1">Meal Type</label>
+              <div className="flex gap-2">
+                {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setEditRecipe({ ...editRecipe, mealType: type })}
+                    className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${editRecipe.mealType === type ? 'bg-white/[0.1]' : 'hover:bg-white/[0.04]'}`}
+                    style={{ borderColor: MEAL_COLORS[type] + (editRecipe.mealType === type ? '' : '40'), color: MEAL_COLORS[type] }}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Existing ingredients */}
+            <div>
+              <label className="text-[9px] text-gray-600 uppercase tracking-wider block mb-2">Ingredients</label>
+              <div className="space-y-1">
+                {editIngredients.map((ing, idx) => (
+                  <div key={ing.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded px-3 py-2 text-xs">
+                    <span className="text-gray-300">{ing.name} — {ing.amount}{ing.unit}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">{ing.macros.calories} kcal</span>
+                      <button onClick={() => setEditIngredients(editIngredients.filter((_, i) => i !== idx))} className="text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add new ingredient */}
+            <details className="mt-1">
+              <summary className="text-[9px] text-[#CCF472] uppercase tracking-wider cursor-pointer hover:text-white transition-colors font-semibold">+ Add Ingredient</summary>
+              <div className="mt-2 bg-white/[0.02] border border-white/[0.06] rounded p-3 space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <input value={editIngForm.name} onChange={e => setEditIngForm({ ...editIngForm, name: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Name" />
+                  <input type="number" value={editIngForm.amount} onChange={e => setEditIngForm({ ...editIngForm, amount: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="Amount" />
+                  <select value={editIngForm.unit} onChange={e => setEditIngForm({ ...editIngForm, unit: e.target.value })} className="glass-input px-2 py-1.5 text-xs bg-transparent">
+                    <option value="g" className="bg-[#0E0E0E]">g</option>
+                    <option value="ml" className="bg-[#0E0E0E]">ml</option>
+                    <option value="oz" className="bg-[#0E0E0E]">oz</option>
+                    <option value="cups" className="bg-[#0E0E0E]">cups</option>
+                    <option value="tbsp" className="bg-[#0E0E0E]">tbsp</option>
+                    <option value="tsp" className="bg-[#0E0E0E]">tsp</option>
+                    <option value="pcs" className="bg-[#0E0E0E]">pcs</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <input type="number" value={editIngForm.calories} onChange={e => setEditIngForm({ ...editIngForm, calories: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="kcal" />
+                  <input type="number" value={editIngForm.protein} onChange={e => setEditIngForm({ ...editIngForm, protein: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="P (g)" />
+                  <input type="number" value={editIngForm.carbs} onChange={e => setEditIngForm({ ...editIngForm, carbs: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="C (g)" />
+                  <input type="number" value={editIngForm.fat} onChange={e => setEditIngForm({ ...editIngForm, fat: e.target.value })} className="glass-input px-2 py-1.5 text-xs" placeholder="F (g)" />
+                </div>
+                <button onClick={handleAddEditIngredient} className="text-xs text-[#CCF472] hover:text-white transition-colors">Add</button>
+              </div>
+            </details>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleSaveEditRecipe} className="glow-btn px-5 py-2 text-sm">Save Changes</button>
+              <button onClick={() => setEditingRecipeId(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1131,7 +1331,13 @@ export default function NutritionPage() {
         </button>
 
         <div className="glass p-5">
-          <h2 className="text-lg font-bold text-white mb-1">{recipe.name}</h2>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-bold text-white">{recipe.name}</h2>
+            <button onClick={() => startEditRecipe(recipe)} className="text-xs text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              Edit
+            </button>
+          </div>
           <span className="text-[9px] px-2 py-0.5 rounded uppercase tracking-wider font-semibold" style={{ color: MEAL_COLORS[recipe.mealType], background: MEAL_COLORS[recipe.mealType] + '15' }}>
             {recipe.mealType}
           </span>
