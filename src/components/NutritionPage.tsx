@@ -489,8 +489,28 @@ export default function NutritionPage() {
     saveToStorage('nutrition-micro-goals', updated);
   }
 
-  // ── Delete consumed meal ──
+  // ── Delete consumed meal — restore prep portion if from prep ──
   function deleteMeal(mealId: string) {
+    const meal = todayLog.meals.find(m => m.id === mealId);
+    if (meal && meal.source === 'prep') {
+      // Restore the portion back to meal prep inventory
+      const updatedItems = [...mealPrep.items];
+      const existingIdx = updatedItems.findIndex(i => i.recipeName === meal.name && i.mealType === meal.mealType);
+      if (existingIdx >= 0) {
+        updatedItems[existingIdx] = { ...updatedItems[existingIdx], count: updatedItems[existingIdx].count + 1 };
+      } else {
+        // Item was fully consumed — re-add it
+        updatedItems.push({
+          recipeId: uid(),
+          recipeName: meal.name,
+          mealType: meal.mealType,
+          count: 1,
+          macrosPerPortion: { ...meal.macros },
+          ...(meal.micros ? { microsPerPortion: { ...meal.micros } } : {}),
+        });
+      }
+      saveMealPrep({ items: updatedItems });
+    }
     const log = { ...todayLog, meals: todayLog.meals.filter(m => m.id !== mealId) };
     saveDailyLogs({ ...dailyLogs, [today]: log });
   }
@@ -604,22 +624,65 @@ export default function NutritionPage() {
         </div>
       </div>
 
-      {/* Quick-add buttons */}
+      {/* Log a Meal — prepped meals + manual entry */}
       <div className="glass p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Log a Meal</h3>
         </div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map(type => (
-            <button
-              key={type}
-              onClick={() => { setManualMeal({ ...manualMeal, mealType: type }); setShowAddMeal(true); }}
-              className="px-4 py-2 rounded text-xs font-medium border transition-colors hover:bg-white/[0.06]"
-              style={{ borderColor: MEAL_COLORS[type] + '40', color: MEAL_COLORS[type] }}
-            >
-              + {type.charAt(0).toUpperCase() + type.slice(1)}
-            </button>
-          ))}
+
+        {/* Prepped meals quick-log */}
+        {mealPrep.items.filter(i => i.count > 0).length > 0 && (
+          <div className="mb-4">
+            <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-2">From Meal Prep</p>
+            <div className="space-y-2">
+              {mealPrep.items.filter(i => i.count > 0).map((item) => {
+                const realIdx = mealPrep.items.indexOf(item);
+                return (
+                  <div
+                    key={`${item.recipeId}-${item.recipeName}`}
+                    className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-lg px-4 py-3 hover:bg-white/[0.04] transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: MEAL_COLORS[item.mealType] }} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-200 truncate">{item.recipeName}</div>
+                        <div className="text-[10px] text-gray-600">
+                          {item.count} left &middot; {item.macrosPerPortion.calories} kcal &middot; P {item.macrosPerPortion.protein.toFixed(0)}g &middot; C {item.macrosPerPortion.carbs.toFixed(0)}g &middot; F {item.macrosPerPortion.fat.toFixed(0)}g
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => consumePrepItem(realIdx)}
+                      className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-[#CCF472] bg-[#CCF472]/10 hover:bg-[#CCF472]/25 border border-[#CCF472]/20 hover:border-[#CCF472]/40 transition-all"
+                    >
+                      Log
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Manual entry section */}
+        <div>
+          {mealPrep.items.filter(i => i.count > 0).length > 0 && (
+            <div className="border-t border-white/[0.06] pt-3 mb-3">
+              <p className="text-[9px] text-gray-600 uppercase tracking-wider mb-2">Or Log Manually</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => { setManualMeal({ ...manualMeal, mealType: type }); setShowAddMeal(true); }}
+                className="px-4 py-2 rounded text-xs font-medium border transition-colors hover:bg-white/[0.06]"
+                style={{ borderColor: MEAL_COLORS[type] + '40', color: MEAL_COLORS[type] }}
+              >
+                + {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {showAddMeal && (
